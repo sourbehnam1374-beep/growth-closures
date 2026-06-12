@@ -25,6 +25,20 @@ no `Classical.choice` anywhere in the development.
     python3 verifiers/test_anomaly_characterization.py   # Thm 9: 698 instances + corpus identity 5014/8631
     python3 verifiers/verify_o1_necessity.py             # exhaustive converse + conservation n=3..8
     python3 verifiers/verify_unified.py                  # 7/7 determination schemas
+    python3 verifiers/test_stronger_properties.py        # 8/8 strengthened variants
+
+## Strengthened variants (this branch)
+`lean/GrowthClosure.lean` gains a "STRENGTHENED VARIANTS" section, each statement
+strictly strengthening a theorem of the trilogy on the same constructive base:
+`K_fixpoint` / `K_least_fixpoint` (Theorem 1 upgraded from least closed superset
+to least FIXED POINT of X ↦ S ⊔ Φ(X)), `K_merge` (Theorem 3 upgraded to replica
+merge), `ingest_extends` (Theorem 5: histories only grow, address-stably),
+`tombstone_permanence_set` (set-level tombstones), `live_extend_adds` /
+`live_extend_removes` (the 2P CALM sandwich over operation logs), and
+`live_replay` (idempotent log replay). Rung-1 coverage:
+`verifiers/test_stronger_properties.py` (V1–V8, ~480 randomized instances).
+NOTE: this branch was authored without a local Lean toolchain — re-run the
+rung-2 kernel check (`lean lean/GrowthClosure.lean`) before merging.
 
 ## Layout
     lean/        single source of truth: the full trilogy development (38,138 B)

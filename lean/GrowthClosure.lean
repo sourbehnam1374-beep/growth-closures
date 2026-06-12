@@ -893,3 +893,197 @@ end Growth
 #print axioms Growth.Unified.confirm_of_det
 #print axioms Growth.Unified.dedup_is_confirmability
 #print axioms Growth.Unified.triangle_edge
+
+/- ====================================================================
+   STRENGTHENED VARIANTS (stronger-variant branch).
+
+   Every statement below strictly strengthens or generalizes a theorem
+   of the development above, on the same constructive base (no imports,
+   no mathlib, no Classical.choice):
+
+   K_fixpoint / K_least_fixpoint  strengthen Theorem 1: K(S) is not
+       merely the least CLOSED superset of S — it is the least FIXED
+       POINT of the inflationary operator X ↦ S ⊔ Φ(X). The closure-
+       operator laws are corollaries of this sharper identity.
+   K_merge  strengthens Theorem 3 (incremental closure) to replica
+       merge: the closure of the join of two independently grown
+       fields is the field of the joined seeds — federation needs no
+       recomputation from raw seeds.
+   ingest_extends  strengthens Theorem 5 (history independence) with
+       the extension half: PROLONGING an ingestion history can only
+       grow the field; streams never retract (CALM, growth side).
+   tombstone_permanence_set  generalizes tombstone permanence from a
+       single re-added atom to an arbitrary re-added SET of removed
+       content.
+   live_extend_adds / live_extend_removes  the 2P CALM sandwich over
+       operation logs: an add-only suffix grows the live store, a
+       remove-only suffix shrinks it — the two monotone halves of
+       2P-monotonicity (twoP_mono), at the log level.
+   live_replay  replaying an entire log is a no-op: at-least-once
+       delivery is free under 2P (with live_swap: any shuffled
+       replay).
+   ==================================================================== -/
+namespace Growth
+
+universe v
+variable {U : Type v}
+
+/-- Idempotence of union. -/
+theorem un_idem (A : U → Prop) : A ⊔ A = A :=
+  pred_ext fun _ => ⟨fun h => h.elim id id, Or.inl⟩
+
+/-- The empty set is a left unit of union. -/
+theorem empty_un (A : U → Prop) : emptyPred ⊔ A = A :=
+  pred_ext fun _ => ⟨fun h => h.elim False.elim id, Or.inr⟩
+
+/-- **Theorem 1, strengthened.** K(S) is a FIXED POINT of the
+inflationary operator X ↦ S ⊔ Φ(X), not merely a closed superset:
+the field is exactly the seed together with the one-step image of the
+field. (⊒ is extensivity + closedness; ⊑ is the new content: the seed
+joined with the one-step image of the field is already closed.) -/
+theorem K_fixpoint (Φ : (U → Prop) → (U → Prop)) (mono : Mono Φ)
+    (S : U → Prop) : K Φ S = S ⊔ Φ (K Φ S) := by
+  apply sub_antisymm
+  · refine K_least Φ (un_left S (Φ (K Φ S))) ?_
+    intro u hu
+    exact Or.inr (mono (un_sub (extensive Φ S) (K_closed Φ mono S)) u hu)
+  · exact un_sub (extensive Φ S) (K_closed Φ mono S)
+
+/-- **Theorem 1, strengthened (minimality).** K(S) is LEAST among all
+fixed points of X ↦ S ⊔ Φ(X): any store that already contains its seed
+and its own one-step consequences contains the field. With
+`K_fixpoint`, K(S) is THE least fixed point. -/
+theorem K_least_fixpoint (Φ : (U → Prop) → (U → Prop))
+    {S X : U → Prop} (hX : X = S ⊔ Φ X) : K Φ S ⊑ X := by
+  refine K_least Φ (fun u hu => ?_) (fun u hu => ?_)
+  · rw [hX]; exact Or.inl hu
+  · rw [hX]; exact Or.inr hu
+
+/-- **Theorem 3, strengthened (replica merge).** Two independently
+closed fields merge by closing their JOIN — identical to the field of
+the joined seeds. Incremental closure (Theorem 3) is the special case
+T := D with K(D) replaced by D via idempotence. -/
+theorem K_merge (Φ : (U → Prop) → (U → Prop)) (mono : Mono Φ)
+    (S T : U → Prop) : K Φ (K Φ S ⊔ K Φ T) = K Φ (S ⊔ T) := by
+  apply sub_antisymm
+  · exact K_least Φ
+      (un_sub (K_mono Φ mono (un_left S T)) (K_mono Φ mono (un_right S T)))
+      (K_closed Φ mono (S ⊔ T))
+  · exact K_mono Φ mono
+      (un_sub (sub_trans (extensive Φ S) (un_left (K Φ S) (K Φ T)))
+        (sub_trans (extensive Φ T) (un_right (K Φ S) (K Φ T))))
+
+theorem unionAll_append : ∀ (Bs Cs : List (U → Prop)),
+    unionAll (Bs ++ Cs) = unionAll Bs ⊔ unionAll Cs
+  | [], Cs => by
+      show unionAll Cs = emptyPred ⊔ unionAll Cs
+      rw [empty_un]
+  | B :: Bs, Cs => by
+      show B ⊔ unionAll (Bs ++ Cs) = (B ⊔ unionAll Bs) ⊔ unionAll Cs
+      rw [unionAll_append Bs Cs, un_assoc]
+
+/-- **Theorem 5, strengthened (history extension).** Prolonging an
+ingestion history can only grow the field: every part of the shorter
+history's field persists — at its exact address — through any further
+batches. The CALM growth half, at the level of histories. -/
+theorem ingest_extends (Φ : (U → Prop) → (U → Prop)) (mono : Mono Φ)
+    (S : U → Prop) (Bs Cs : List (U → Prop)) :
+    ingest Φ (K Φ S) Bs ⊑ ingest Φ (K Φ S) (Bs ++ Cs) := by
+  rw [ingest_eq Φ mono Bs S, ingest_eq Φ mono (Bs ++ Cs) S, unionAll_append]
+  exact K_mono Φ mono
+    (un_sub (un_left S (unionAll Bs ⊔ unionAll Cs))
+      (fun u hu => Or.inr (Or.inl hu)))
+
+end Growth
+
+namespace Growth
+namespace Deletion
+
+variable {U : Type}
+
+/-- **Tombstone permanence, strengthened.** Re-adding an arbitrary SET
+of removed content is a no-op — `tombstone_permanence` is the
+singleton instance `A' := single a`. -/
+theorem tombstone_permanence_set (Φ : (U → Prop) → (U → Prop))
+    (A R A' : U → Prop) (hA' : A' ⊑ R) :
+    K Φ (diff (A ⊔ A') R) = K Φ (diff A R) := by
+  have h : diff (A ⊔ A') R = diff A R := by
+    apply pred_ext; intro u
+    constructor
+    · intro h
+      refine ⟨?_, h.2⟩
+      cases h.1 with
+      | inl hA => exact hA
+      | inr ha' => exact absurd (hA' u ha') h.2
+    · intro h
+      exact ⟨Or.inl h.1, h.2⟩
+  rw [h]
+
+/-- A log segment consisting of adds only. -/
+def AddOnly : List (Op U) → Prop
+  | [] => True
+  | Op.add _ :: t => AddOnly t
+  | Op.remove _ :: t => False
+
+/-- A log segment consisting of removes only. -/
+def RemoveOnly : List (Op U) → Prop
+  | [] => True
+  | Op.add _ :: t => False
+  | Op.remove _ :: t => RemoveOnly t
+
+theorem removesOf_addOnly :
+    ∀ l : List (Op U), AddOnly l → removesOf l = emptyPred
+  | [], _ => rfl
+  | Op.add _ :: t, h => removesOf_addOnly t h
+  | Op.remove _ :: t, h => False.elim h
+
+theorem addsOf_removeOnly :
+    ∀ l : List (Op U), RemoveOnly l → addsOf l = emptyPred
+  | [], _ => rfl
+  | Op.add _ :: t, h => False.elim h
+  | Op.remove _ :: t, h => addsOf_removeOnly t h
+
+/-- **2P CALM sandwich, growth half.** Extending a log with add-only
+operations can only grow the live store — even when the appended adds
+re-introduce removed content (remove-wins silently absorbs those). -/
+theorem live_extend_adds (Φ : (U → Prop) → (U → Prop)) (mono : Mono Φ)
+    (l ext : List (Op U)) (hext : AddOnly ext) :
+    live Φ l ⊑ live Φ (l ++ ext) := by
+  show K Φ (diff (addsOf l) (removesOf l)) ⊑
+       K Φ (diff (addsOf (l ++ ext)) (removesOf (l ++ ext)))
+  rw [addsOf_append, removesOf_append, removesOf_addOnly ext hext, un_empty]
+  exact twoP_mono Φ mono (un_left (addsOf l) (addsOf ext))
+    (sub_refl (removesOf l))
+
+/-- **2P CALM sandwich, deletion half.** Extending a log with
+remove-only operations can only shrink the live store. -/
+theorem live_extend_removes (Φ : (U → Prop) → (U → Prop)) (mono : Mono Φ)
+    (l ext : List (Op U)) (hext : RemoveOnly ext) :
+    live Φ (l ++ ext) ⊑ live Φ l := by
+  show K Φ (diff (addsOf (l ++ ext)) (removesOf (l ++ ext))) ⊑
+       K Φ (diff (addsOf l) (removesOf l))
+  rw [addsOf_append, removesOf_append, addsOf_removeOnly ext hext, un_empty]
+  exact twoP_mono Φ mono (sub_refl (addsOf l))
+    (un_left (removesOf l) (removesOf ext))
+
+/-- **Replay idempotence.** Replaying an entire log is a no-op: the
+live store is a function of the SET of operations, so at-least-once
+delivery is free under 2P. With `live_swap`, any shuffled replay of
+any prefix is likewise absorbed. -/
+theorem live_replay (Φ : (U → Prop) → (U → Prop)) (l : List (Op U)) :
+    live Φ (l ++ l) = live Φ l := by
+  show K Φ (diff (addsOf (l ++ l)) (removesOf (l ++ l)))
+     = K Φ (diff (addsOf l) (removesOf l))
+  rw [addsOf_append, removesOf_append, un_idem, un_idem]
+
+end Deletion
+end Growth
+
+#print axioms Growth.K_fixpoint
+#print axioms Growth.K_least_fixpoint
+#print axioms Growth.K_merge
+#print axioms Growth.ingest_extends
+#print axioms Growth.Deletion.tombstone_permanence_set
+#print axioms Growth.Deletion.live_extend_adds
+#print axioms Growth.Deletion.live_extend_removes
+#print axioms Growth.Deletion.live_replay
