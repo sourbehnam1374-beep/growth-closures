@@ -106,6 +106,15 @@ class ProofGraph:
     def _bundle_edges(self, ids: set[str]) -> list[Edge]:
         return [e for e in self.edges if e.src in ids and e.dst in ids]
 
+    def coverage(self, minted_bundles: list[list[str]]) -> dict:
+        """Anti-shell-accumulation audit: a kernel earns its place only by being
+        referenced in a Sheet that actually MINTED. Anything else is an orphan."""
+        used: set[str] = set()
+        for b in minted_bundles:
+            used |= set(b)
+        orphans = sorted(set(self.kernels) - used)
+        return {"total": len(self.kernels), "referenced": len(used), "orphans": orphans}
+
     def proof_of_intersection(
         self, bundle: list[str], load_bearing: set[str], executable_path: list[str]
     ) -> dict:
@@ -250,6 +259,7 @@ def build_corpus() -> ProofGraph:
     g.add_edge(Edge("k07", "k10", "implies"))    # METROLOGY  -> METRO/ORTHO
     g.add_edge(Edge("k09", "k08", "supports"))   # FH noise explains low single-ICC
     g.add_edge(Edge("k10", "k04", "supports"))   # METROLOGY -> ORTHO    (cross)
+    g.add_edge(Edge("k10", "k11", "supports"))   # MDC constraint also governs the phenotype tree's split thresholds (cross)
     return g
 
 # ---- run two attempts: one that REFUSES, one that MINTS --------------------
@@ -287,7 +297,8 @@ def main() -> None:
         "structural compressibility (MDL: dL>0 vs null) AND input resolvability "
         "(decision-boundary spacing >= MDC95 of its measured inputs). These are two "
         "independent, pre-data audit axes; a rule can fail either, and both are "
-        "detectable WITHOUT any new outcome study."
+        "detectable WITHOUT any new outcome study. The same test applies to ANY "
+        "thresholded clinical rule, including morphometric phenotype classifiers."
     )
     path = [
         "1. Extract rule structure; compute dL = L(null) - L(rule) on the outcome proxy. dL<=0 -> structural fragility (RuleAudit).",
@@ -299,8 +310,8 @@ def main() -> None:
     b = g.mint_sheet(
         "SS-001-rule-trustworthiness",
         thesis,
-        bundle=["k01", "k02", "k04", "k06", "k03", "k05", "k07", "k08", "k09", "k10", "k12"],
-        load_bearing={"k01", "k02", "k04", "k06", "k03", "k05", "k07", "k10"},
+        bundle=["k01", "k02", "k04", "k06", "k03", "k05", "k07", "k08", "k09", "k10", "k11", "k12"],
+        load_bearing={"k01", "k02", "k04", "k06", "k03", "k05", "k07", "k10", "k11"},
         executable_path=path,
     )
     show("ATTEMPT B  (RuleAudit/MDL  x  pelvic-R reliability/MDC — a real bridge)", b)
@@ -313,6 +324,16 @@ def main() -> None:
             print("  ", s)
         print("\nflagged in-bundle (carried as context, non-load-bearing):",
               b["poi"]["closures"]["3_evidence_closure"]["flagged_kernels"])
+
+    # coverage audit: count only kernels inside a sheet that actually minted
+    minted_bundles = [r["body"]["kernels"] for r in (a, b) if r["minted"]]
+    cov = g.coverage(minted_bundles)
+    print("\n" + "=" * 72)
+    print("COVERAGE AUDIT (anti-shell-accumulation)")
+    print("-" * 72)
+    print(canonical(cov))
+    print("orphans:", "none — every kernel earns its place" if not cov["orphans"]
+          else cov["orphans"])
 
 if __name__ == "__main__":
     main()
