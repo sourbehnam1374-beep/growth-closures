@@ -212,25 +212,38 @@ def kernel_root_addr(addrs):
     return H("KernelRoot", *sorted(addrs))
 
 
-def minimal_kernel(rows, envs, target, tau=2.0, delta=2.0, max_features=6):
+def minimal_kernel(rows, envs, target, tau=2.0, delta=2.0, max_features=6,
+                   canonical=False, tie_eps=2.0):
     """Certified-minimal kernel SET over the invariant+admissible candidates:
     forward-greedy by BIC gain (>= tau), then ablation (drop any member whose
-    removal does not worsen BIC by >= delta). Returns (S, certified)."""
+    removal does not worsen BIC by >= delta). Returns (S, certified).
+
+    With `canonical=True`, ties at the selection step (candidates within
+    `tie_eps` BIC of the best) are broken by the smallest CONTENT ADDRESS, so
+    the minimal set becomes a deterministic function of the data — recovering
+    history-independence at the cost of an arbitrary-but-stable choice among
+    equivalent minima. Without it, floating-point summation order (hence row
+    order) can flip the argmin between near-tied features."""
     kernel, feats, _ = discover_kernel(rows, envs, target)
     pool = list(kernel.keys())
     y = [r[target] for r in rows]
     S = []
     cur = _bic(S, feats, rows, y)
     while len(S) < max_features:
-        best, best_bic = None, cur
+        elig = []
         for a in pool:
             if a in S:
                 continue
             bic = _bic(S + [a], feats, rows, y)
-            if cur - bic >= tau and bic < best_bic:
-                best, best_bic = a, bic
-        if best is None:
+            if cur - bic >= tau:
+                elig.append((bic, a))
+        if not elig:
             break
+        best_bic = min(b for b, _ in elig)
+        if canonical:
+            best = min(a for b, a in elig if b <= best_bic + tie_eps)  # min addr
+        else:
+            best = min(elig, key=lambda t: t[0])[1]
         S.append(best)
         cur = best_bic
     changed = True
@@ -409,6 +422,18 @@ def self_check(rows, envs, target):
     chk("KP-10 minimal set presentation-dependent but ⊆ stable kernel "
         "(|S|=%d |S'|=%d, equal=%s)" % (len(S), len(Sp), set(S) == set(Sp)),
         both_in_kernel)
+
+    # KP-11: the CANONICAL minimal set (content-address tie-break) is a
+    # deterministic function of the data — history-independent under row
+    # permutation, root address and all. Recovers Theorem-5 stability for the
+    # minimal projection at the cost of an arbitrary-but-stable tie choice.
+    Sc, cert_c, _ = minimal_kernel(rows, envs, target, canonical=True)
+    Sc_p, _, _ = minimal_kernel(rows_p, envs_p, target, canonical=True)
+    chk("KP-11 canonical minimal set history-independent (root %s, equal=%s)"
+        % (kernel_root_addr(Sc)[:12], set(Sc) == set(Sc_p)),
+        set(Sc) == set(Sc_p)
+        and kernel_root_addr(Sc) == kernel_root_addr(Sc_p)
+        and set(Sc) <= set(kernel))
 
     print(line("="))
     npass = sum(1 for _, ok in results if ok)

@@ -1199,8 +1199,36 @@ theorem m0_least (b o m : Nat) (hb : 1 ≤ b) (hm : Admits b o m) :
   rw [Nat.mul_comm (o / b) b] at hmono
   omega
 
+/-- Regime characterization: the MDL threshold is exactly 3 iff the
+overhead/benefit ratio o/b lies in [1, 2), i.e. `b ≤ o < 2b`. This is the
+`m₀ = 3` cell of `growth_check.py`'s grid (the design floor m ≥ 3), proved
+over ℕ on core arithmetic. -/
+theorem m0_eq_three (b o : Nat) (hb : 1 ≤ b) :
+    o / b + 2 = 3 ↔ (b ≤ o ∧ o < 2 * b) := by
+  have h : b * (o / b) + o % b = o := Nat.div_add_mod o b
+  have hr : o % b < b := Nat.mod_lt _ hb
+  constructor
+  · intro h3
+    have hq : o / b = 1 := by omega
+    rw [hq, Nat.mul_one] at h
+    omega
+  · intro hbo
+    obtain ⟨hbo1, hbo2⟩ := hbo
+    have hle : o / b ≤ 1 := by
+      by_contra hc
+      have h2 : 2 ≤ o / b := by omega
+      have hm : b * 2 ≤ b * (o / b) := Nat.mul_le_mul (Nat.le_refl b) h2
+      omega
+    have hge : 1 ≤ o / b := by
+      by_contra hc
+      have h0 : o / b = 0 := by omega
+      rw [h0, Nat.mul_zero, Nat.zero_add] at h
+      omega
+    omega
+
 end Mdl
 end Growth
 
 #print axioms Growth.Mdl.m0_admits
 #print axioms Growth.Mdl.m0_least
+#print axioms Growth.Mdl.m0_eq_three

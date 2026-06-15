@@ -204,10 +204,35 @@ minimality, like the view, is a presentation-sensitive projection of a stable
 object. Every minimal selection still lands **inside** the history-independent
 kernel (KP-10), which bounds the instability exactly.
 
-## 9. Remaining next steps
+## 9. Regime characterization, and a canonical minimal set
 
-1. State the `m₀ = 3 ⟺ o/b ∈ [1,2)` regime characterization in Lean
-   (the `Mdl` companion to the grid check), and the general `r > 0` surplus.
-2. A canonical tie-break (e.g. by content address) to make the minimal set a
-   deterministic function of the data, recovering history-independence at the
-   cost of an arbitrary-but-stable choice among equivalent minima.
+Both items here are now done.
+
+**`m₀ = 3 ⟺ o/b ∈ [1,2)` in Lean.** `Growth.Mdl.m0_eq_three` proves, over ℕ
+on core arithmetic, that the MDL threshold is exactly 3 iff `b ≤ o < 2b` —
+the `m₀ = 3` cell of `growth_check.py`'s grid, lifted from Rung 1 to Rung 2.
+(The general `r > 0` surplus `Δ = (m−1)b − o − mr` is inherently
+real/rational-valued; it stays at Rung 1, where `test_growth_properties.py`
+P12b checks it on exact rationals. Bringing it into Lean would require a
+rationals layer the development deliberately avoids.)
+
+**Canonical (history-independent) minimal set.** `minimal_kernel(...,
+canonical=True)` breaks selection ties by smallest **content address** when
+candidates are within `tie_eps` BIC of the best. This makes the minimal set a
+deterministic function of the data: it is invariant under row permutation,
+root address and all (KP-11, `equal=True`), in direct contrast to the default
+greedy set (KP-10, `equal=False`). Theorem-5 stability is recovered for the
+minimal projection, at the cost of an arbitrary-but-stable choice among
+equivalent minima — the choice itself is pinned by the content-addressing
+discipline, so it is reproducible across sites and reruns.
+
+## 10. Status
+
+Rung-2 (Lean, pending a local kernel check): `Determines`/`stable_iff`
+(determination), `K_fixpoint`/`K_least_fixpoint`/`K_merge` (least-fixpoint
+closure), `Growth.Approx.*` (finite-sample invariance), `Growth.Mdl.*`
+(admissibility threshold). Rung-1 (run here, green): `verify_unified.py`,
+`verify_invariance_bridge.py` (10/10), `verify_kernel_provenance.py` (11/11),
+plus the existing growth/deletion ledgers and property suites. The bridge is
+now closed end to end: every conceptual correspondence in §1–§5 has a
+matching artifact on at least one rung, and the central ones on both.
