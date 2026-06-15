@@ -40,6 +40,10 @@ merge), `ingest_extends` (Theorem 5: histories only grow, address-stably),
 NOTE: this branch was authored without a local Lean toolchain — re-run the
 rung-2 kernel check (`lean lean/GrowthClosure.lean`) before merging.
 
+See `docs/INVARIANCE_BRIDGE.md` for how the determination theory
+(`Determines`/`stable_iff`) and the least-fixpoint closure (`K_least_fixpoint`)
+map onto invariant-kernel discovery (ICP / IRM / MDL).
+
 ## Layout
     lean/        single source of truth: the full trilogy development (38,138 B)
     papers/      canonical XeLaTeX sources + PDFs + arXiv (pdflatex) variants
