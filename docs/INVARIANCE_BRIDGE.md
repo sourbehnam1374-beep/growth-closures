@@ -136,10 +136,46 @@ necessity of injective `H`); Part B shows the *statistical* limit — as noise
 sign-flipping spurious feature stays rejected, so the empirical verdict
 converges to the deterministic `stable_iff` verdict.
 
-## 7. Remaining next steps
+## 7. The synthesis, realized: content-addressed invariant kernel
 
-1. Treat an invariant-edge test (sign-consistency across environments) as an
-   executable Rung-1 witness for `stable_iff`, on real tabular data.
-2. Give kernel candidates content-addressed provenance: a candidate is a
-   composite part; its admissibility is the MDL `Δ`-threshold; its survival
-   across environments is `stable_iff`'s hypothesis.
+The two former next-steps are now one artifact,
+`verifiers/verify_kernel_provenance.py` (7/7), which fuses all three threads
+on a single tabular table:
+
+- **Content addressing (growth theory).** Each candidate feature is a
+  composite *part* whose address is `SHA-256` over its generator spec
+  (`op`, operand columns), using the same `H`/unit-separator discipline as
+  `growth_check.py`. The address is a pure function of the spec
+  (premise-inscribing for features), so it is deterministic and injective
+  (KP-01) and identical across datasets that share columns.
+- **MDL admissibility (the Δ-threshold, "what to build").** A candidate is
+  admitted only if it *shortens the description* — a BIC gain
+  `Δ = n ln(RSS₀/RSS₁) − ln n > floor` on the pooled fit. Pure noise is
+  rejected (KP-03).
+- **`stable_iff` hypothesis (determination theory, "what to keep").** A
+  candidate enters the kernel only if its signed target relationship is
+  consistent across **every** environment. The sign-flipping decoy `s1`
+  fails this explicitly (KP-07, signs e.g. `[1,-1,1,-1]`); the invariant core
+  is recovered (KP-02).
+
+The synthesis then exhibits the growth-theory laws on the *kernel itself*:
+
+- **History-independence (Theorem 5 flavor).** The kernel address set is
+  invariant under row permutation (KP-04) and under environment relabeling
+  (KP-05) — it is a function of the content, not the presentation.
+- **Conservativity (Theorem 2 flavor).** Adding a fresh consistent
+  environment preserves every kernel address (KP-06): survivors keep their
+  exact addresses, exactly as growth never retracts.
+
+Runs on the bundled structured benchmark by default, or on your own table via
+`--data table.csv --target y --env site`. (Sandbox note: the default table is
+a *structured synthetic*, not a downloaded real-world set — the environment's
+network policy blocks fetching public datasets; point `--data` at a real CSV
+to exercise it on genuine data.)
+
+## 8. Remaining next steps
+
+1. State a finite-sample "approximate MDL admissibility" lemma in Lean to
+   mirror the BIC gate the way `Growth.Approx` mirrors the invariance test.
+2. Lift the kernel from per-feature screening to a certified-minimal SET
+   (forward selection + ablation), matching the engine's `select_minimal_kernel`.

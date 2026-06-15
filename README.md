@@ -27,6 +27,7 @@ no `Classical.choice` anywhere in the development.
     python3 verifiers/verify_unified.py                  # 7/7 determination schemas
     python3 verifiers/test_stronger_properties.py        # 8/8 strengthened variants
     python3 verifiers/verify_invariance_bridge.py        # 10/10 Rung-1<->Rung-2 link
+    python3 verifiers/verify_kernel_provenance.py        # 7/7 content-addressed kernel
 
 ## Strengthened variants (this branch)
 `lean/GrowthClosure.lean` gains a "STRENGTHENED VARIANTS" section, each statement
