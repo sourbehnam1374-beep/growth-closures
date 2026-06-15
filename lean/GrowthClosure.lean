@@ -1155,3 +1155,52 @@ end Growth
 #print axioms Growth.Approx.sample_sound
 #print axioms Growth.Approx.sample_complete
 #print axioms Growth.Approx.sample_stable_iff
+
+/- ====================================================================
+   MDL ADMISSIBILITY (the Δ-threshold), Rung-2.
+
+   The growth admissibility gate with rate r = 0: a binding of `m` premises
+   under code parameters (b, o) shortens the description iff the MDL surplus
+   Δ = (m−1)·b − o is positive, i.e. `o < (m−1)·b`. `growth_check.py` checks
+   the closed form `m₀ = ⌊o/b⌋ + 2` and the regime `m₀ = 3 ⟺ o/b ∈ [1,2)`
+   on an 11×11 grid (Rung 1). Here that closed form is the LEAST admissible
+   premise count, proved over ℕ on the same constructive base (only core
+   `Nat` arithmetic; no mathlib). This is the "what to build" gate that the
+   invariant-kernel bridge (docs/INVARIANCE_BRIDGE.md §4, §7) reuses as the
+   admission criterion for content-addressed feature generators. -/
+namespace Growth
+namespace Mdl
+
+/-- MDL admissibility with r = 0: `m` premises shorten the description under
+code parameters (b, o) iff the surplus Δ = (m−1)·b − o is positive. -/
+def Admits (b o m : Nat) : Prop := o < (m - 1) * b
+
+/-- The closed-form threshold `m₀ = ⌊o/b⌋ + 2` is admissible (b ≥ 1). -/
+theorem m0_admits (b o : Nat) (hb : 1 ≤ b) : Admits b o (o / b + 2) := by
+  unfold Admits
+  have h : b * (o / b) + o % b = o := Nat.div_add_mod o b
+  have hr : o % b < b := Nat.mod_lt _ hb
+  have e : (o / b + 2 - 1) * b = b * (o / b) + b := by
+    have h1 : o / b + 2 - 1 = o / b + 1 := by omega
+    rw [h1, Nat.mul_comm, Nat.mul_add, Nat.mul_one]
+  rw [e]
+  omega
+
+/-- `m₀ = ⌊o/b⌋ + 2` is the LEAST admissible premise count: any admissible
+`m` is at least the threshold (b ≥ 1). With `m0_admits`, m₀ is exactly the
+least element of the admissible set — the MDL design floor. -/
+theorem m0_least (b o m : Nat) (hb : 1 ≤ b) (hm : Admits b o m) :
+    o / b + 2 ≤ m := by
+  unfold Admits at hm
+  by_contra hlt
+  have hm1 : m - 1 ≤ o / b := by omega
+  have h : b * (o / b) + o % b = o := Nat.div_add_mod o b
+  have hmono : (m - 1) * b ≤ (o / b) * b := Nat.mul_le_mul hm1 (Nat.le_refl b)
+  rw [Nat.mul_comm (o / b) b] at hmono
+  omega
+
+end Mdl
+end Growth
+
+#print axioms Growth.Mdl.m0_admits
+#print axioms Growth.Mdl.m0_least

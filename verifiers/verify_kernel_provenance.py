@@ -163,6 +163,93 @@ def invariant_across_envs(feat, rows, envs, target):
 # ----------------------------------------------------------------------
 # The content-addressed kernel
 # ----------------------------------------------------------------------
+def _solve(A, b):
+    """Solve A x = b (A square) by Gaussian elimination with partial pivoting
+    and a tiny ridge for numerical stability. Pure stdlib."""
+    n = len(b)
+    M = [row[:] + [b[i]] for i, row in enumerate(A)]
+    for i in range(n):
+        M[i][i] += 1e-9  # ridge
+    for col in range(n):
+        piv = max(range(col, n), key=lambda r: abs(M[r][col]))
+        M[col], M[piv] = M[piv], M[col]
+        if abs(M[col][col]) < 1e-12:
+            continue
+        for r in range(n):
+            if r != col:
+                f = M[r][col] / M[col][col]
+                for c in range(col, n + 1):
+                    M[r][c] -= f * M[col][c]
+    return [M[i][n] / M[i][i] if abs(M[i][i]) > 1e-12 else 0.0 for i in range(n)]
+
+
+def _ols_rss(cols, y):
+    """Residual sum of squares of the multivariate least-squares fit
+    y ~ 1 + cols (intercept + each feature column)."""
+    n = len(y)
+    p = len(cols) + 1
+    X = [[1.0] + [c[i] for c in cols] for i in range(n)]
+    XtX = [[sum(X[i][a] * X[i][b] for i in range(n)) for b in range(p)]
+           for a in range(p)]
+    Xty = [sum(X[i][a] * y[i] for i in range(n)) for a in range(p)]
+    beta = _solve(XtX, Xty)
+    return sum((y[i] - sum(beta[a] * X[i][a] for a in range(p))) ** 2
+               for i in range(n))
+
+
+def _bic(addrs, feats, rows, y):
+    """BIC of the feature SET (lower = shorter description)."""
+    n = len(y)
+    cols = [[feats[a]["fn"](r) for r in rows] for a in addrs]
+    rss = max(_ols_rss(cols, y), 1e-12)
+    k = len(addrs) + 1
+    return n * math.log(rss / n) + k * math.log(n)
+
+
+def kernel_root_addr(addrs):
+    """Content address of the kernel SET: a 'root' part binding its member
+    addresses (sorted, so order-free), mirroring growth_check composites."""
+    return H("KernelRoot", *sorted(addrs))
+
+
+def minimal_kernel(rows, envs, target, tau=2.0, delta=2.0, max_features=6):
+    """Certified-minimal kernel SET over the invariant+admissible candidates:
+    forward-greedy by BIC gain (>= tau), then ablation (drop any member whose
+    removal does not worsen BIC by >= delta). Returns (S, certified)."""
+    kernel, feats, _ = discover_kernel(rows, envs, target)
+    pool = list(kernel.keys())
+    y = [r[target] for r in rows]
+    S = []
+    cur = _bic(S, feats, rows, y)
+    while len(S) < max_features:
+        best, best_bic = None, cur
+        for a in pool:
+            if a in S:
+                continue
+            bic = _bic(S + [a], feats, rows, y)
+            if cur - bic >= tau and bic < best_bic:
+                best, best_bic = a, bic
+        if best is None:
+            break
+        S.append(best)
+        cur = best_bic
+    changed = True
+    while changed and len(S) > 1:
+        changed = False
+        for a in list(S):
+            without = _bic([x for x in S if x != a], feats, rows, y)
+            if without - cur < delta:  # a is redundant
+                S.remove(a)
+                cur = _bic(S, feats, rows, y)
+                changed = True
+                break
+    # certified minimal: removing ANY member worsens BIC by >= delta
+    certified = all(
+        _bic([x for x in S if x != a], feats, rows, y) - cur >= delta - 1e-9
+        for a in S) if len(S) >= 1 else True
+    return S, certified, feats
+
+
 def discover_kernel(rows, envs, target, mdl_floor=2.0):
     """Returns {addr: record} for candidates that are BOTH MDL-admissible
     (description shortened by at least mdl_floor) AND invariant across
@@ -289,6 +376,39 @@ def self_check(rows, envs, target):
     s1_signs = diag.get(s1_addr, {}).get("signs", [])
     chk("KP-07 spurious s1 fails stable_iff hypothesis (signs flip: %s)" % s1_signs,
         s1_inv is False)
+
+    # KP-08: certified-minimal kernel SET (forward selection + ablation)
+    S, certified, _ = minimal_kernel(rows, envs, target)
+    S_names = sorted(feats[a]["name"] for a in S)
+    print("  MINIMAL kernel set: %s" % S_names)
+    in_pool = set(S) <= set(kernel)
+    has_inv = any(("x1" in feats[a]["name"] or "x2" in feats[a]["name"]) for a in S)
+    no_decoy = not any(("s1" in feats[a]["name"] or feats[a]["name"] == "noise__id")
+                       for a in S)
+    chk("KP-08 minimal set: subset of invariant kernel, certified-minimal, "
+        "invariant core only", in_pool and certified and has_inv and no_decoy
+        and len(S) >= 1)
+
+    # KP-09: the kernel-root content address is deterministic (same data =>
+    # same root) and ORDER-FREE over the member listing (sorted before hash).
+    root = kernel_root_addr(S)
+    S_again, _, _ = minimal_kernel(rows, envs, target)
+    shuffled_members = S[:]
+    random.Random(3).shuffle(shuffled_members)
+    chk("KP-09 kernel-root address deterministic + order-free (root %s)"
+        % root[:12],
+        kernel_root_addr(S_again) == root
+        and kernel_root_addr(shuffled_members) == root)
+
+    # KP-10: minimality is PRESENTATION-DEPENDENT but bounded by the stable
+    # kernel. Greedy minimal selection on permuted rows may pick a different
+    # tie-equivalent set (cf. Demo E: retraction lives in the view), yet every
+    # selection lands inside the history-independent full kernel (KP-04).
+    Sp, _, _ = minimal_kernel(rows_p, envs_p, target)  # permuted rows
+    both_in_kernel = set(S) <= set(kernel) and set(Sp) <= set(kernel)
+    chk("KP-10 minimal set presentation-dependent but ⊆ stable kernel "
+        "(|S|=%d |S'|=%d, equal=%s)" % (len(S), len(Sp), set(S) == set(Sp)),
+        both_in_kernel)
 
     print(line("="))
     npass = sum(1 for _, ok in results if ok)

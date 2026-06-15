@@ -173,9 +173,41 @@ a *structured synthetic*, not a downloaded real-world set — the environment's
 network policy blocks fetching public datasets; point `--data` at a real CSV
 to exercise it on genuine data.)
 
-## 8. Remaining next steps
+## 8. MDL admissibility on Rung 2, and the certified-minimal set
 
-1. State a finite-sample "approximate MDL admissibility" lemma in Lean to
-   mirror the BIC gate the way `Growth.Approx` mirrors the invariance test.
-2. Lift the kernel from per-feature screening to a certified-minimal SET
-   (forward selection + ablation), matching the engine's `select_minimal_kernel`.
+Both items here are now done.
+
+**MDL admissibility lifted to Lean.** `lean/GrowthClosure.lean` gains
+`Growth.Mdl`: with rate `r = 0`, a binding of `m` premises shortens the
+description iff `o < (m−1)·b` (`Admits b o m`). The closed-form threshold
+`m₀ = ⌊o/b⌋ + 2` — previously only checked on `growth_check.py`'s 11×11 grid
+(Rung 1) — is proved to be **admissible** (`m0_admits`) and the **least**
+admissible premise count (`m0_least`), over ℕ on core `Nat` arithmetic, no
+mathlib. That is the "what to build" gate the kernel bridge reuses, now
+kernel-checkable.
+
+**Certified-minimal kernel set.** `verify_kernel_provenance.py` adds
+`minimal_kernel` (forward selection by BIC gain + ablation, via a stdlib
+multivariate OLS), matching the engine's `select_minimal_kernel`. The chosen
+set is **certified minimal** — removing any member worsens BIC by at least the
+ablation margin (KP-08) — and it is given a content address as a *root part*
+binding its sorted members (`kernel_root_addr`), deterministic and order-free
+(KP-09).
+
+**An honest asymmetry (the Demo-E phenomenon).** The full invariant kernel is
+history-independent (KP-04/05), but the *greedy minimal subset* is
+**presentation-dependent**: on a permuted row order it may pick a
+tie-equivalent but different set (KP-10 reports `equal=False` on the
+benchmark). This is the same split the growth paper already exhibits — the
+subsumption-quotient *view* is non-conservative while the *field* is — so
+minimality, like the view, is a presentation-sensitive projection of a stable
+object. Every minimal selection still lands **inside** the history-independent
+kernel (KP-10), which bounds the instability exactly.
+
+## 9. Remaining next steps
+
+1. State the `m₀ = 3 ⟺ o/b ∈ [1,2)` regime characterization in Lean
+   (the `Mdl` companion to the grid check), and the general `r > 0` surplus.
+2. A canonical tie-break (e.g. by content address) to make the minimal set a
+   deterministic function of the data, recovering history-independence at the
+   cost of an arbitrary-but-stable choice among equivalent minima.
