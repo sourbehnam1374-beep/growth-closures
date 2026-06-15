@@ -1087,3 +1087,71 @@ end Growth
 #print axioms Growth.Deletion.live_extend_adds
 #print axioms Growth.Deletion.live_extend_removes
 #print axioms Growth.Deletion.live_replay
+
+/- ====================================================================
+   THE RUNG-1 ↔ RUNG-2 LINK: finite-sample (approximate) stable_iff.
+
+   `stable_iff` (Unified) equates exact address-invariance under a context
+   map c with κ-invariance under c. An empirical invariant-kernel test
+   (ICP/IRM-style: check that a feature's relationship is invariant across a
+   FINITE SAMPLE of environments) estimates the left-hand side. This block
+   states that estimator's exact properties on the same constructive base:
+
+   `SampleInvariant f c sample`  — the empirical test: the committed value f
+       is c-invariant on every sampled environment (the ε = 0, finite-sample
+       face of invariance — what the cross-environment check actually probes).
+   `sample_sound`     — SOUNDNESS (one-sided): exact invariance ⇒ the test
+       passes on ANY sample; contrapositive, a sample violation refutes exact
+       invariance. A flagged spurious feature is genuinely non-invariant.
+   `sample_complete`  — COMPLETENESS IN THE LIMIT: if the sample exhausts the
+       environments, sample-invariance IS exact invariance. More environments
+       only sharpen the test; full coverage makes it exact.
+   `sample_stable_iff`— the estimator's exhaustive limit coincides with
+       `stable_iff`: exhaustive-sample address-invariance ⟺ κ-invariance.
+       This is the precise sense in which the Rung-1 statistic's limit is the
+       Rung-2 theorem.
+   ==================================================================== -/
+namespace Growth
+namespace Approx
+
+variable {E P A : Type}
+
+open Unified
+
+/-- The empirical invariance test on a finite environment sample: the
+committed value `f` agrees under the context map `c` on every sampled
+environment. The ε = 0, finite-sample face of address-invariance. -/
+def SampleInvariant (f : E → A) (c : E → E) (sample : List E) : Prop :=
+  ∀ e, e ∈ sample → f (c e) = f e
+
+/-- **Soundness (one-sided).** Exact c-invariance implies the test passes on
+ANY sample; contrapositive: a sample violation refutes exact invariance. The
+empirical test never falsely flags an invariant relationship. -/
+theorem sample_sound (f : E → A) (c : E → E) (sample : List E)
+    (hinv : ∀ e, f (c e) = f e) : SampleInvariant f c sample :=
+  fun e _ => hinv e
+
+/-- **Completeness in the limit.** If the sample exhausts the environments,
+the finite-sample test is exact invariance — the estimator's coverage limit. -/
+theorem sample_complete (f : E → A) (c : E → E) (sample : List E)
+    (hcov : ∀ e, e ∈ sample) (hs : SampleInvariant f c sample) :
+    ∀ e, f (c e) = f e :=
+  fun e => hs e (hcov e)
+
+/-- **The Rung-1 ↔ Rung-2 link.** On an exhaustive environment sample, the
+empirical invariance test on the committed address coincides EXACTLY with
+`stable_iff`: sample address-invariance ⟺ κ-invariance under `c`. The
+statistic's coverage limit is the determination theorem. -/
+theorem sample_stable_iff (π : E → P) (H : P → A)
+    (hH : ∀ p p', H p = H p' → p = p') (c : E → E)
+    (sample : List E) (hcov : ∀ e, e ∈ sample) :
+    SampleInvariant (addr π H) c sample ↔ (∀ e, π (c e) = π e) :=
+  ⟨fun hs => (stable_iff π H hH c).mp (fun e => hs e (hcov e)),
+   fun hk => fun e _ => (stable_iff π H hH c).mpr hk e⟩
+
+end Approx
+end Growth
+
+#print axioms Growth.Approx.sample_sound
+#print axioms Growth.Approx.sample_complete
+#print axioms Growth.Approx.sample_stable_iff

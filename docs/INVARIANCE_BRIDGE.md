@@ -112,12 +112,34 @@ minimal core.
   bootstraps and thresholds). The bridge is "the algebraic limit of the
   estimator," not a claim that the estimator is exact at finite `n`.
 
-## 6. Suggested next steps
+## 6. The Rung-1 ↔ Rung-2 link, made precise
+
+Next-step #3 below is now realized. `lean/GrowthClosure.lean` carries a
+`Growth.Approx` namespace formalizing the *finite-sample* (approximate) face
+of `stable_iff`:
+
+- `SampleInvariant f c sample` — the empirical test: the committed value `f`
+  is `c`-invariant on every sampled environment (the ε = 0, finite-sample face
+  of invariance, i.e. what the cross-environment check probes).
+- `sample_sound` — one-sided **soundness**: exact invariance ⇒ the test passes
+  on any sample; contrapositive, a sample violation refutes exact invariance.
+- `sample_complete` — **completeness in the limit**: an exhaustive sample makes
+  the test exact.
+- `sample_stable_iff` — the estimator's **exhaustive limit coincides with
+  `stable_iff`**: exhaustive address-invariance ⟺ κ-invariance (needs the
+  injective-`H` hypothesis, exactly as `stable_iff` does).
+
+`verifiers/verify_invariance_bridge.py` is the matching Rung-1 ledger
+(10/10): Part A reproduces the four facts above exactly (including the
+necessity of injective `H`); Part B shows the *statistical* limit — as noise
+→ 0 the empirical invariance score of the kernel feature → 1.0 while the
+sign-flipping spurious feature stays rejected, so the empirical verdict
+converges to the deterministic `stable_iff` verdict.
+
+## 7. Remaining next steps
 
 1. Treat an invariant-edge test (sign-consistency across environments) as an
    executable Rung-1 witness for `stable_iff`, on real tabular data.
 2. Give kernel candidates content-addressed provenance: a candidate is a
    composite part; its admissibility is the MDL `Δ`-threshold; its survival
    across environments is `stable_iff`'s hypothesis.
-3. State a finite-sample "approximate `stable_iff`" lemma whose exact limit is
-   the Lean theorem, to make the Rung-1 ↔ Rung-2 link precise.
