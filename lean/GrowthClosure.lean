@@ -1178,13 +1178,13 @@ def Admits (b o m : Nat) : Prop := o < (m - 1) * b
 /-- The closed-form threshold `m₀ = ⌊o/b⌋ + 2` is admissible (b ≥ 1). -/
 theorem m0_admits (b o : Nat) (hb : 1 ≤ b) : Admits b o (o / b + 2) := by
   unfold Admits
-  have h : b * (o / b) + o % b = o := Nat.div_add_mod o b
-  have hr : o % b < b := Nat.mod_lt _ hb
-  have e : (o / b + 2 - 1) * b = b * (o / b) + b := by
-    have h1 : o / b + 2 - 1 = o / b + 1 := by omega
-    rw [h1, Nat.mul_comm, Nat.mul_add, Nat.mul_one]
-  rw [e]
-  omega
+  have hbpos : 0 < b := by omega
+  have h := Nat.lt_div_mul_add (a := o) hbpos
+  have hs : ∀ q : Nat, q + 2 - 1 = q + 1 := by
+    intro q
+    omega
+  rw [hs (o / b), Nat.add_mul, Nat.one_mul]
+  exact h
 
 /-- `m₀ = ⌊o/b⌋ + 2` is the LEAST admissible premise count: any admissible
 `m` is at least the threshold (b ≥ 1). With `m0_admits`, m₀ is exactly the
@@ -1192,12 +1192,12 @@ least element of the admissible set — the MDL design floor. -/
 theorem m0_least (b o m : Nat) (hb : 1 ≤ b) (hm : Admits b o m) :
     o / b + 2 ≤ m := by
   unfold Admits at hm
-  by_contra hlt
-  have hm1 : m - 1 ≤ o / b := by omega
-  have h : b * (o / b) + o % b = o := Nat.div_add_mod o b
-  have hmono : (m - 1) * b ≤ (o / b) * b := Nat.mul_le_mul hm1 (Nat.le_refl b)
-  rw [Nat.mul_comm (o / b) b] at hmono
-  omega
+  have hbpos : 0 < b := by omega
+  have hdiv : o / b < m - 1 := (Nat.div_lt_iff_lt_mul hbpos).2 hm
+  have step : ∀ q n : Nat, q < n - 1 → q + 2 ≤ n := by
+    intro q n h
+    omega
+  exact step (o / b) m hdiv
 
 /-- Regime characterization: the MDL threshold is exactly 3 iff the
 overhead/benefit ratio o/b lies in [1, 2), i.e. `b ≤ o < 2b`. This is the
@@ -1205,25 +1205,16 @@ overhead/benefit ratio o/b lies in [1, 2), i.e. `b ≤ o < 2b`. This is the
 over ℕ on core arithmetic. -/
 theorem m0_eq_three (b o : Nat) (hb : 1 ≤ b) :
     o / b + 2 = 3 ↔ (b ≤ o ∧ o < 2 * b) := by
-  have h : b * (o / b) + o % b = o := Nat.div_add_mod o b
-  have hr : o % b < b := Nat.mod_lt _ hb
+  have hbpos : 0 < b := by omega
   constructor
   · intro h3
     have hq : o / b = 1 := by omega
-    rw [hq, Nat.mul_one] at h
-    omega
+    have hge : b ≤ o := (Nat.one_le_div_iff hbpos).1 (by omega)
+    have hlt : o < 2 * b := (Nat.div_lt_iff_lt_mul hbpos).1 (by omega)
+    exact ⟨hge, hlt⟩
   · intro hbo
-    obtain ⟨hbo1, hbo2⟩ := hbo
-    have hle : o / b ≤ 1 := by
-      by_contra hc
-      have h2 : 2 ≤ o / b := by omega
-      have hm : b * 2 ≤ b * (o / b) := Nat.mul_le_mul (Nat.le_refl b) h2
-      omega
-    have hge : 1 ≤ o / b := by
-      by_contra hc
-      have h0 : o / b = 0 := by omega
-      rw [h0, Nat.mul_zero, Nat.zero_add] at h
-      omega
+    obtain ⟨hge, hlt⟩ := hbo
+    have hq : o / b = 1 := Nat.div_eq_of_lt_le (by simpa using hge) (by simpa using hlt)
     omega
 
 end Mdl
