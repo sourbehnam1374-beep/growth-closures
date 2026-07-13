@@ -27,7 +27,7 @@ no `Classical.choice` anywhere in the development.
     python3 verifiers/verify_unified.py                  # 7/7 determination schemas
     python3 verifiers/test_stronger_properties.py        # 8/8 strengthened variants
     python3 verifiers/verify_invariance_bridge.py        # 10/10 Rung-1<->Rung-2 link
-    python3 verifiers/verify_kernel_provenance.py        # 7/7 content-addressed kernel
+    python3 verifiers/verify_kernel_provenance.py        # 11/11 content-addressed kernel
 
 ## Strengthened variants (this branch)
 `lean/GrowthClosure.lean` gains a "STRENGTHENED VARIANTS" section, each statement
@@ -39,8 +39,8 @@ merge), `ingest_extends` (Theorem 5: histories only grow, address-stably),
 `live_extend_removes` (the 2P CALM sandwich over operation logs), and
 `live_replay` (idempotent log replay). Rung-1 coverage:
 `verifiers/test_stronger_properties.py` (V1–V8, ~480 randomized instances).
-NOTE: this branch was authored without a local Lean toolchain — re-run the
-rung-2 kernel check (`lean lean/GrowthClosure.lean`) before merging.
+The complete file is kernel-checked with Lean 4.30.0; continuous verification
+also rejects executable `sorry`, `admit`, and `Classical.choice` dependencies.
 
 See `docs/INVARIANCE_BRIDGE.md` for how the determination theory
 (`Determines`/`stable_iff`) and the least-fixpoint closure (`K_least_fixpoint`)
