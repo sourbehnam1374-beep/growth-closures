@@ -66,7 +66,7 @@ Both are *least objects closed under a monotone enlargement condition*, with
 minimality enforced (lattice-leastness here; MDL/BIC there). Kernel discovery
 is, structurally, a least-fixpoint computation in feature space; this repo is
 the lattice theory of exactly that closure, now with the least-fixpoint
-characterization stated and (pending re-run of the toolchain) kernel-checked.
+characterization stated and kernel-checked with Lean 4.30.0.
 
 `K_merge` (`K(K(S) ⊔ K(T)) = K(S ⊔ T)`) adds the federation reading: two
 independently discovered invariant cores combine by re-closing their join —
@@ -184,7 +184,7 @@ description iff `o < (m−1)·b` (`Admits b o m`). The closed-form threshold
 (Rung 1) — is proved to be **admissible** (`m0_admits`) and the **least**
 admissible premise count (`m0_least`), over ℕ on core `Nat` arithmetic, no
 mathlib. That is the "what to build" gate the kernel bridge reuses, now
-kernel-checkable.
+kernel-checked.
 
 **Certified-minimal kernel set.** `verify_kernel_provenance.py` adds
 `minimal_kernel` (forward selection by BIC gain + ablation, via a stdlib
@@ -228,7 +228,7 @@ discipline, so it is reproducible across sites and reruns.
 
 ## 10. Status
 
-Rung-2 (Lean, pending a local kernel check): `Determines`/`stable_iff`
+Rung-2 (Lean 4.30.0, kernel-checked): `Determines`/`stable_iff`
 (determination), `K_fixpoint`/`K_least_fixpoint`/`K_merge` (least-fixpoint
 closure), `Growth.Approx.*` (finite-sample invariance), `Growth.Mdl.*`
 (admissibility threshold). Rung-1 (run here, green): `verify_unified.py`,
