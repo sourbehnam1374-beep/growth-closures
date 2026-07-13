@@ -1,5 +1,7 @@
 # Content-Addressed Rule Closures — verified trilogy
 
+[![Verify trilogy](https://github.com/sourbehnam1374-beep/growth-closures/actions/workflows/verify.yml/badge.svg)](https://github.com/sourbehnam1374-beep/growth-closures/actions/workflows/verify.yml)
+
 Three working papers on the least-fixpoint theory of content-addressed knowledge stores,
 each on a three-rung verification ladder (paper proofs / executable verification /
 Lean 4 kernel check). Code: MIT. Papers: CC BY 4.0 (canonical home: arXiv).
@@ -25,6 +27,15 @@ no `Classical.choice` anywhere in the development.
     python3 verifiers/test_anomaly_characterization.py   # Thm 9: 698 instances + corpus identity 5014/8631
     python3 verifiers/verify_o1_necessity.py             # exhaustive converse + conservation n=3..8
     python3 verifiers/verify_unified.py                  # 7/7 determination schemas
+
+## Continuous verification
+
+GitHub Actions runs the fixed ledgers and randomized property suites on pinned
+Python dependencies, compiles `GrowthClosure.lean` with the exact toolchain in
+`lean-toolchain`, scans executable Lean source for `sorry`, `admit`, and
+`Classical.choice`, and rejects any such dependency reported by the axiom
+audit. Optional bridge/ProofGraph verifiers are picked up automatically when
+their branches are rebased onto this workflow.
 
 ## Layout
     lean/        single source of truth: the full trilogy development (38,138 B)
