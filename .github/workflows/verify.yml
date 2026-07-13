@@ -75,6 +75,7 @@ jobs:
         run: python3 verifiers/verify_lean_hygiene.py
       - name: Compile and capture the axiom audit
         run: |
+          set -o pipefail
           lean --version
           lean lean/GrowthClosure.lean | tee "${RUNNER_TEMP}/lean-audit.txt"
       - name: Enforce the reported axiom boundary
