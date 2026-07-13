@@ -1,0 +1,80 @@
+name: Verify trilogy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-trilogy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    env:
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - name: Install pinned verification dependencies
+        run: python -m pip install --requirement requirements-ci.txt
+      - name: Compile verifier sources
+        run: python -m compileall -q verifiers
+      - name: Run fixed ledgers
+        run: |
+          python verifiers/growth_check.py
+          python verifiers/delete_growth.py
+          python verifiers/verify_o1_necessity.py
+          python verifiers/verify_unified.py
+      - name: Run property and anomaly suites
+        run: |
+          python verifiers/test_growth_properties.py
+          python -m pytest -q verifiers/test_delete_properties.py
+          python verifiers/test_anomaly_characterization.py
+      - name: Verify optional bridge and product prototypes when present
+        run: |
+          if [ -f verifiers/verify_invariance_bridge.py ]; then python verifiers/verify_invariance_bridge.py; fi
+          if [ -f verifiers/verify_kernel_provenance.py ]; then python verifiers/verify_kernel_provenance.py; fi
+          if [ -f verifiers/test_stronger_properties.py ]; then python -m pytest -q verifiers/test_stronger_properties.py; fi
+          if [ -f verifiers/proofgraph_v0.py ]; then python verifiers/proofgraph_v0.py; fi
+
+  lean:
+    name: Lean 4.30.0 kernel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+      - name: Reject trust-expanding source tokens
+        run: python3 verifiers/verify_lean_hygiene.py
+      - name: Compile and capture the axiom audit
+        run: |
+          lean --version
+          lean lean/GrowthClosure.lean | tee "${RUNNER_TEMP}/lean-audit.txt"
+      - name: Enforce the reported axiom boundary
+        run: |
+          if grep -F "Classical.choice" "${RUNNER_TEMP}/lean-audit.txt"; then
+            echo "Unexpected Classical.choice dependency"
+            exit 1
+          fi
+          if grep -E "declaration uses '(sorry|admit)'" "${RUNNER_TEMP}/lean-audit.txt"; then
+            echo "Unexpected incomplete declaration"
+            exit 1
+          fi
