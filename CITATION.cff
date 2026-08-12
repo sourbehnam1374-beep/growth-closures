@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this development, please cite it as below."
+title: "Content-Addressed Rule Closures: growth, deletion, and the kappa-correspondence (verified development)"
+authors:
+  - family-names: "Sour"
+    given-names: "Behnam"
+    orcid: "https://orcid.org/0009-0002-3176-1956"
+version: "1.0.0"
+date-released: "2026-06-11"
+license: MIT
+repository-code: "https://github.com/sourbehnam1374-beep/growth-closures"
+keywords:
+  - content addressing
+  - least fixpoint
+  - Lean 4
+  - deletion propagation
+  - history independence
+  - deduplication

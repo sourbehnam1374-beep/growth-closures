@@ -1,0 +1,252 @@
+% kappa_nucleus_v0.tex — compile: xelatex (twice)
+\documentclass[10pt]{article}
+\usepackage[margin=1.05in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newcommand{\K}{\mathsf{K}}
+\newcommand{\sub}{\subseteq}
+\newcommand{\diffop}{\setminus}
+\newcommand{\kz}{\kappa_0}
+\newcommand{\kp}{\kappa'}
+
+\title{\textbf{Naming Disciplines for Generated Knowledge:\\ the $\kappa$-Correspondence}}
+\author{Behnam Sour, MD \\ \small Orthopaedic Surgery, Shafa Yahyaeian Hospital, Tehran $\cdot$ Bone \& Joint Reconstruction Research Center, IUMS \\ \small ORCID 0009-0002-3176-1956}
+\date{\small Working paper v1 $\cdot$ 2026-06-11 $\cdot$ in preparation $\cdot$ not peer-reviewed.\\
+\small Third paper of the series; companion to \cite{growth,deletion}. Artifact: one self-contained Lean~4 file (no \texttt{mathlib}, no \texttt{sorry}, one command), an exhaustive/randomized Python suite, and corpus instrumentation, shipped as ancillary files.}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent A content-addressed rule closure stores the least fixpoint $K(S)$ of finitary typed rules over a seed $S$, every part identified by a recursive hash of a committed projection $\kappa$ of its content. Companion papers fixed one discipline ($\kappa_0$: kind, payload, premise addresses) and proved its growth and deletion theory. This paper makes the discipline the parameter. We prove a \emph{$\kappa$-correspondence}: each storage guarantee is a functional dependency --- a \emph{determination} --- between features of the committed projection. Unification of records, deduplication scope, address stability under growth, and confirmability by an outside observer are one statement instantiated at four feature pairs (the Determination Theorem; all four schemas and both corollaries kernel-checked, axiom-free, in a self-contained Lean~4 development). Two consequences. First, deduplication and confirmation-of-content are the same predicate read at two observer stations: the storage benefit and the privacy attack known from production cloud deduplication are typed as one determination, and the dedup/audit/deniability erasure triangle is tight, all three two-property vertices achievable by explicit policies. Second, the recursive clause does not reduce to the flat framework: committing premises into identity is \emph{necessary} for exact record-local deletion (necessity converse; kernel axioms \texttt{[propext]} only), and renouncing it forces the provenance regime, the blow-up conserved between address parts and derivation records (checked $n=3..8$: $1,5,16,42,99,219$). The tag dial separates three independent axes --- mutability, entropy, granularity --- and gives a formal account of a deployed dilemma: Nix's input-addressed versus content-addressed derivations. The price of deniability is measured on a natural-language corpus: unsalted, duplicate mass $0.45\%$ and source-aware confirmation at $2^{13.07}$ hashes; salted at $\lambda{=}128$, information-theoretic deniability and zero deduplication. Proofs, the exhaustive/randomized Python suite, and the one-command Lean development ship as ancillary files.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+
+Content-addressed stores of \emph{generated} knowledge are everywhere: version control and Merkle-DAG storage name blobs by their hash; build systems name artifacts by hashes of recipes or of outputs; deduplicating cloud storage names files by their digests; content-addressed languages name code by the hash of its syntax tree. Each such system fixes, usually implicitly, a \emph{naming discipline}: a choice of which features of a part's content are committed into its address. Everything else about the store --- what deduplicates, what stays stable as the store grows, what an outsider can confirm, what can be deniably erased, and what deletion costs --- follows from that choice.
+
+The companion papers \cite{growth,deletion} fixed one discipline, $\kappa_0$ (commit the kind, the payload, and the addresses of the premises), and developed its theory: growth is conservative, incremental, history-independent, and continuous; deletion satisfies a cone theorem with a characterized anomaly; a monotonicity boundary localizes CALM in the rule format. This paper asks the prior question: \emph{why these guarantees from this discipline?} The answer in the literature is folklore, distributed by community. Security knows the deduplication/confidentiality trade-off and the confirmation side-channel; database theory knows monotonicity boundaries, deletion-propagation complexity, and provenance bookkeeping; the data-structures literature knows history independence; build systems debate input- versus content-addressing in RFCs. Each community owns one edge of the picture and a local vocabulary for it; none states the common mechanism.
+
+We make the discipline the parameter. An identity scheme is a committed projection $\pi_\kappa$ of content; a guarantee is a determination --- a functional dependency between features of that projection; and the correspondence says the two lists are the same list. Concretely:
+
+\begin{enumerate}
+\item \textbf{The frame} (\S\ref{sec:setting}): disciplines $\kappa$ as committed projections; the guarantee vocabulary as predicates over stores and observers.
+\item \textbf{The Determination Theorem} (\S\ref{sec:determination}): each guarantee holds iff a determination $\mathrm{Det}(k,x)$ holds on $\pi_\kappa$, uniformly across four feature pairs; all four schemas and both corollaries kernel-checked and axiom-free.
+\item \textbf{The recursive clause does not reduce} (\S\ref{sec:o1}): committing premises into identity is \emph{necessary} for exact record-local deletion --- the converse of the companion papers' design choice (kernel axioms \texttt{[propext]} only) --- with a dichotomy, inscription or the provenance regime, and a conservation law equating the blow-up paid in address parts with the one paid in derivation records.
+\item \textbf{The erasure triangle and the two-observer identity} (\S\ref{sec:triangle}): $\mathrm{DEDUP}\wedge\mathrm{AUDIT}\Rightarrow\neg\mathrm{DEN}$ beyond min-entropy; all three two-property vertices achievable by explicit policies; deduplication and confirmability one predicate at two observer stations --- the typing of a known production attack.
+\item \textbf{The tag dial} (\S\ref{sec:dial}): tag mutability, tag entropy, and granularity are independent axes; the dial's endpoints give a formal account of Nix's input- versus content-addressed derivations.
+\item \textbf{The price of deniability, measured} (\S\ref{sec:price}): on a natural-language corpus, what salting costs in deduplication and buys in confirmation resistance, with the $\lambda$ exchange rate explicit.
+\item \textbf{The verification ladder} (\S\ref{sec:verification}): every claim paper-proved; the finite claims verified exhaustively or at corpus scale in Python; the core kernel-checked in one self-contained Lean~4 file --- no \texttt{mathlib}, no \texttt{sorry}, one command.
+\end{enumerate}
+
+Honesty about depth, up front: the determination schemas are deliberately elementary --- the dependency framework is Armstrong's \cite{Armstrong74}, labeled as such --- and the unification, the converse, and the kernel artifact are the contribution. \S\ref{sec:related} places every edge of the correspondence next to its community cousin; the three closest neighbors are credited inside their own sections, not buried in related work.
+
+
+\section{Setting: identity schemes}\label{sec:setting}
+
+The companion papers fix one identity discipline and derive its consequences. This note makes the discipline the parameter.
+
+\begin{definition}[Identity scheme]\label{def:scheme}
+Fix a feature alphabet for parts: \emph{content} (payload bytes), \emph{premises} (sorted child addresses), \emph{rule}, \emph{descriptor}, \emph{nonce} (fresh randomness of min-entropy $\ge \lambda$), \emph{epoch}. An \emph{identity scheme} is a pair $(\kappa, H)$ of a commitment set $\kappa$ of features and a collision-resistant hash $H$; the address of a part is $H$ applied to its $\kappa$-projection, recursively through premises. Injectivity of addresses on committed features is the single extra-mathematical assumption, as in H4 of \cite{growth}.
+\end{definition}
+
+Two schemes are compared throughout. $\kz = \{\text{rule},\text{descriptor},\text{premises},\text{content}\}$ is the companion papers' H4: identity inscribes derivation. $\kp = \{\text{rule},\text{descriptor}\}$ omits premises: all admissible bindings of one descriptor cohort collapse to \emph{one} part --- the natural ``one object per cohort'' design, and exactly the versioned-cohort resolution of \cite[\S6.2]{growth}.
+
+Under $\kz$, the deletion paper proves: derivations are unique (premise inscription $\Rightarrow$ single derivation), hence deletion is \emph{exact and record-local} --- removing the upward cone, computed from each part's own stored record, coincides bit-for-bit with re-closure (the cone theorem), and DRed-style alternative-derivation accounting \cite{GuptaMS93} is structurally absent. This note proves the converse direction and then characterizes the erasure face of the correspondence.
+
+\section{O1: premise inscription is necessary}\label{sec:o1}
+
+\begin{lemma}[Preimage coincidence]\label{lem:coincide}
+If premises $\notin \kappa$, then any two rule instances agreeing on the committed features but differing in premise sets produce the \emph{identical} address. No hash collision is involved: the preimages are equal. The output is one part with at least two derivations; single derivation fails.
+\end{lemma}
+
+\begin{proof}
+Immediate from Definition~\ref{def:scheme}: the address is a function of the $\kappa$-projection alone. \end{proof}
+
+The substantive question is whether multiplicity actually destroys record-local deletion, or whether some clever choice of stored record survives it. It does not survive it.
+
+\begin{theorem}[Necessity of premise inscription]\label{thm:necessity}
+Consider the $\kp$-store on a single cohort of four atoms with threshold $\tau = 3$. Call $r$ a \emph{representative record} if $r$ is an admissible premise set retained as the part's stored children, and say $r$ is \emph{correct} if record-local cone excision under $r$ agrees with re-closure on every deletion $D$. Then \textbf{no representative record is correct}: for every admissible $r$ there is a single-atom deletion on which excision diverges from ground truth --- and always by \emph{over-deletion} (excision removes the part while an alternative derivation survives).
+\end{theorem}
+
+\begin{proof}
+Any admissible $r$ has $|r| \ge \tau = 3$. Pick any $a \in r$ and delete $D = \{a\}$. The survivors number $4 - 1 = 3 \ge \tau$, so re-closure retains the part (some admissible subset survives). But $r \cap D \neq \emptyset$, so record-local excision removes it. Hence every $r$ fails, by over-deletion.
+\end{proof}
+
+\noindent\emph{Mechanization.} Kernel-checked as \texttt{Growth.Necessity.necessity} (a bounded universal statement discharged by \texttt{decide}; axioms \texttt{[propext]} only), with the concrete face \texttt{witness\_overdelete} (record $\{a_1,a_2,a_3\}$, delete $a_1$); exhaustively re-verified in Python over all five admissible records and all $2^4$ deletions.
+
+\begin{corollary}[Deletion dichotomy at the identity layer]\label{cor:dichotomy}
+Exact deletion forces a choice of where derivations live. Either \emph{(i)} premises $\sub \kappa$: identity splits where provenance differs, derivations are unique, and deletion is record-local and exact (the regime of \cite{deletion}); or \emph{(ii)} the store keeps the full derivation multiset per part and tests survival on deletion --- \textbf{the provenance regime}: counting/DRed view maintenance \cite{GuptaMS93}, i.e.\ exactly the bookkeeping that provenance semirings make systematic \cite{GKT07} --- which is exact (kernel-checked as \texttt{counting\_exact}) but no longer record-local: correctness consults every alternative derivation. There is no third option within record-local semantics (Theorem~\ref{thm:necessity}). The contrast with relational deletion propagation \cite{BKT02,KVW12} is structural: their problem optimizes among alternative derivations; premise inscription removes the alternatives, so propagation under $\kz$ is exact and optimization-free --- key preservation \cite{BKT02} is the relational cousin of clause (i).
+\end{corollary}
+
+\begin{remark}[Conservation of the blow-up]\label{rem:conservation}
+The descriptor-clique blow-up of \cite[Prop.~10]{growth} is invariant under the choice: a cohort of $n$ atoms costs $\sum_{m \ge \tau} \binom{n}{m}$ \emph{parts} under $\kz$ and the same number of \emph{derivation records} attached to one part under $\kp$ (verified $n = 3..8$: $1, 5, 16, 42, 99, 219$ on both sides). The exponential cannot be deleted from the design space; it can only be moved between identity and provenance. This sharpens the companion papers' design principle: \emph{monotone, complete storage; parsimony in views} --- and now, \emph{provenance in identity, or identity's work done again in provenance}.
+\end{remark}
+
+Theorem~\ref{thm:necessity} is, to our knowledge, the first statement in this development that none of the prior slices contains: CALM \cite{Hellerstein10,AmelootNV13} speaks of monotonicity, not identity; the deletion paper proves sufficiency of inscription; the necessity direction is new. It also \emph{explains} a design fact the companion papers record without explanation: why the versioned-cohort resolution (\S6.2 of \cite{growth}) must carry a version chain --- the chain is the derivation bookkeeping that Corollary~\ref{cor:dichotomy}(ii) makes mandatory once premises leave the preimage.
+
+\section{The erasure triangle}\label{sec:triangle}
+
+The deletion paper's retention analysis tabulates policies; this section proves the table is \emph{tight}. Fix the $\kz$-discipline for live content and consider what a deletion policy retains about removed parts.
+
+\begin{definition}[The three properties]\label{def:three}
+\textbf{DEDUP}: addresses are a deterministic function of content-determined features (re-ingesting equal content yields the equal address). \textbf{AUDIT}: from retained data alone, plus a claimed preimage, anyone can verify non-interactively that a specific part existed and was removed. \textbf{DEN} (deniable erasure at level $\lambda$): in the \emph{confirmation game}, an adversary holding the retained data and any candidate payload $p$ decides whether $p$ was removed with advantage at most $2^{-\lambda}$ over guessing.
+\end{definition}
+
+\begin{theorem}[Tightness of the triangle]\label{thm:triangle}
+\emph{(Impossibility.)} DEDUP $\wedge$ AUDIT $\Rightarrow$ $\neg$DEN beyond payload min-entropy: the adversary hashes the candidate $p$ under the public, content-determined address function and tests membership in the retained address set; the advantage is $1$ for any candidate equal to a removed payload, so deniability degrades to the $2^{-H_\infty}$ guessing bound --- one dictionary lookup for published text. \emph{(Achievability.)} Each pair is realized by a measured policy of \cite{deletion}: \{DEDUP, DEN\} by excision or epoch re-closure (nothing retained $\Rightarrow$ nothing to audit); \{DEDUP, AUDIT\} by address-only tombstones (deniability only up to min-entropy, as above); \{AUDIT, DEN\} by salting ($\textnormal{nonce} \in \kappa$): retained addresses are unverifiable without the per-part nonce, so erasure is deniable to outsiders \emph{and} provable by selective disclosure of the nonce --- at the price of DEDUP, since equal content no longer shares an address.
+\end{theorem}
+
+\begin{proof}
+Impossibility is the confirmation attack written out: DEDUP makes the address function public and content-determined; AUDIT requires the removed addresses to be retained and verification to be non-interactive; composing the two is the adversary. Achievability: the first two rows are Propositions of \cite[\S Erasure]{deletion} (retention separates the policies; address-only tombstones); the third row follows from Lemma~\ref{lem:coincide} read contrapositively --- a committed high-min-entropy nonce makes the address indistinguishable from random to anyone lacking the nonce (advantage $\le 2^{-\lambda}$), while disclosure of $(p, \textnormal{nonce})$ re-derives the address and convinces a verifier.
+\end{proof}
+
+\begin{remark}[Selective audit; placement of prior art]\label{rem:selective}
+The third vertex converts AUDIT from public to \emph{designated-verifier}: the deleting party can always prove a specific erasure, outsiders can verify nothing --- arguably the correct posture for Art.~17 obligations. Credit where it is due: the dedup-vs-confidentiality mechanism is the convergent-encryption trade-off \cite{Douceur02}, formalized game-theoretically as message-locked encryption \cite{BKR13mle,Bellare13}; and the confirmation attack itself was demonstrated against production cloud deduplication by Harnik, Pinkas \& Shulman-Peleg \cite{Harnik10}, with deduplication-as-access-oracle following in \cite{Halevi11}. Corollary~\ref{cor:twoobs} is the \emph{typing} of their observation; the AUDIT axis, the tightness statement, and the placement inside closure theory are what this paper adds. The mechanism is theirs; the triangle is ours.
+\end{remark}
+
+\section{$\kappa$5: the tag dial}\label{sec:dial}
+
+\begin{definition}[Tagged scheme]\label{def:tagged}
+$\kappa_T = \kz \cup \{\textnormal{tag}\}$ with tags drawn from a set $T$ and committed into the preimage; a part is a pair $(\textnormal{tag}, \textnormal{content})$, and the closure development applies unchanged at the tagged universe (the formalization is parametric in $U$; instantiate at $T \times U$).
+\end{definition}
+
+\begin{theorem}[The epoch row]\label{thm:epoch}
+Under $\kappa_T$: \emph{(i) Re-addability.} Content removed at tag $e$ returns live on re-ingestion at any fresh tag $e'$ with $(e',u) \notin R$ --- by extensivity alone (kernel-checked, \emph{axiom-free}, as \texttt{Growth.Epoch.epoch\_readd}). \emph{(ii) Instability.} The same content at different tags is a different part (\texttt{epoch\_fresh}, axiom-free): cross-tag address stability and cross-tag deduplication fail by construction. \emph{(iii) Locality.} Within a single tag-class, the entire $\kz$ package of \cite{growth,deletion} holds, tag-fiber by tag-fiber.
+\end{theorem}
+
+The pairing is the content of the row: \texttt{tombstone\_permanence} \cite{deletion} says removal is permanent at a \emph{fixed identity}; \texttt{epoch\_readd} says the \emph{content} returns at a fresh one. Re-addability is bought exactly by identity churn --- never for free.
+
+\begin{remark}[Three independent axes of one tag]\label{rem:axes}
+The dial's endpoints: a constant tag recovers $\kz$ (tombstone permanence governs; no re-add); an injective-per-ingestion tag is the nonce vertex of Theorem~\ref{thm:triangle} (no two ingestions ever share identity). Intermediate granularity --- epochs --- gives era-local deduplication with boundary re-addability. The crucial separation from $\kappa$3: epochs are \emph{enumerable} (low conditional min-entropy), so mutability buys READD \emph{without} deniability. One committed tag, three independent levers: \textbf{mutability} $\Rightarrow$ re-addability; \textbf{entropy} $\Rightarrow$ deniability; \textbf{granularity} $\Rightarrow$ deduplication scope.
+\end{remark}
+
+\noindent\emph{The dial, deployed.} The choice this section formalizes is not hypothetical: it is the live design axis of the Nix store. Input-addressed derivations commit the \emph{build inputs} into the output path --- premises $\sub \kappa$, references stable before the build, signatures required for trust, rebuilds propagating through the dependency graph --- while content-addressed derivations commit the \emph{output content}, buying ``early cutoff'' (the dedup schema at output granularity) and signature-free verification (the confirmability clause, with the trust-model concerns that the two-observer identity predicts) at the price of eval-time-stable references \cite{Dolstra06,NixRFC062}. The correspondence is, to our knowledge, the first formal account of that documented engineering dilemma.
+
+\section{O5: the price of deniability, measured}\label{sec:price}
+
+\begin{theorem}[Confirmation bound]\label{thm:bound}
+In the confirmation game against a retained address set, an adversary making $q$ hash evaluations has advantage at most $q \cdot 2^{-(H_\infty(\textnormal{payload} \mid \mathcal{A}) + H_\infty(\textnormal{tag} \mid \mathcal{A}))}$. \emph{Proof:} union bound over queries against the unpredictability of the committed pair; hashing supplies free verification of a guess and nothing more \cite{RogawayShrimpton04}. The bound is the standard guessing bound; what follows --- the instrumentation --- is the contribution claimed.
+\end{theorem}
+
+\noindent\emph{Measurement (Moby-Dick sentence corpus; pipeline of \cite[\S Empirics]{growth}).} Extracted ingestions $8636$ (of which $8631$ carry a descriptor --- the cohort pipeline's denominator); distinct payloads $8597$; \textbf{dedup mass $39$ ingestions $= 0.45\%$} (the most-repeated payload is Ahab's refrain, ``Hast seen the White Whale,'' $\times 4$). Unsalted address-only tombstones on this corpus: a source-aware adversary covers the entire payload space in $8597$ hashes ($2^{13.07}$), confirming any removed sentence at $O(1)$ per candidate --- \textbf{deniability $0$ bits}, the worst case by construction (published text), which is precisely why it is the right stress test. Salted at $\lambda = 128$: per-candidate cost multiplies by $2^{128}$; the price is the $0.45\%$ of ingestions no longer unified.
+
+\begin{remark}[Exchange rate]\label{rem:exchange}
+On natural-prose corpora the salted vertex of the triangle is \emph{nearly free}: $128$ bits of deniability for $0.45\%$ storage. The trade inverts on dedup-heavy corpora (artifact stores, blob caches), where the same construction forfeits its central economy. The triangle's binding constraint is a per-corpus measurable, and the measurement is one pass over the payload histogram.
+\end{remark}
+
+\section{The Determination Theorem}\label{sec:determination}
+
+The six rows now admit a single statement. The right abstraction is the oldest one in database theory: a \emph{determination} --- observer-knowledge $k$ determines quantity $x$ when $k$-equal events are $x$-equal --- i.e.\ a functional dependency \cite{Armstrong74}, transported from relations to identity schemes.
+
+\begin{definition}[Determination]\label{def:det}
+For maps $k : E \to K$ and $x : E \to X$ on ingestion events, $\mathrm{Det}(k, x)$ holds iff $\forall e, e'\!: k(e) = k(e') \Rightarrow x(e) = x(e')$. An identity scheme is $\mathrm{addr} = H \circ \pi_\kappa$ with $H$ injective on committed projections (the H4-style assumption).
+\end{definition}
+
+\begin{theorem}[Determination Theorem]\label{thm:determination}
+For every commitment $\kappa$, granularity $g$, context map $c$, and observer knowledge $k$:
+\begin{enumerate}[label=(\alph*), itemsep=1pt, leftmargin=2em]
+\item \textbf{Unification.} $\mathrm{addr}(e) = \mathrm{addr}(e') \iff \pi_\kappa(e) = \pi_\kappa(e')$.
+\item \textbf{Deduplication.} $g$-granular dedup $\iff$ $\mathrm{Det}(g, \pi_\kappa)$: dedup holds exactly at granularities that determine the commitment. Instances: $g = \text{content}$ gives $\kappa2$; a committed nonce defeats every $g$ below events ($\kappa3$); a committed epoch yields dedup within eras ($\kappa5$'s granularity lever).
+\item \textbf{Stability.} Addresses are $c$-invariant $\iff$ $\pi_\kappa$ is $c$-invariant. Instances: growth leaves derivation content fixed --- the identity half of conservativity; an era bump changes the committed tag --- XSTAB fails ($\kappa5$; \texttt{epoch\_fresh} is the pointwise face).
+\item \textbf{Confirmation.} $\mathrm{Det}(k, \pi_\kappa)$ lets observer $k$ decide membership of any retained address set; its failure is quantified by $H_\infty(\pi_\kappa \mid k)$ (Theorem~\ref{thm:bound}).
+\item \textbf{Recursive clause.} Exact record-local deletion $\iff$ premises $\sub \kappa$ --- sufficiency is the deletion paper's cone theorem, necessity is Theorem~\ref{thm:necessity}. This clause provably does \emph{not} reduce to (a)--(d): premises feed addresses back into their own determining features, outside the flat dependency model.
+\end{enumerate}
+Clauses (a)--(d) and both corollaries below are kernel-checked \emph{axiom-free} (\texttt{Growth.Unified}: \texttt{unify\_iff}, \texttt{dedup\_iff}, \texttt{stable\_iff}, \texttt{confirm\_of\_det}); each is also instantiated on the reference implementation (\texttt{verify\_unified.py}).
+\end{theorem}
+
+\begin{corollary}[Two-observer identity]\label{cor:twoobs}
+DEDUP is $\mathrm{Det}(\text{content}, \mathrm{addr})$; $\neg$DEN is $\mathrm{Det}(k_{\mathrm{adv}}, \mathrm{addr})$. \textbf{Deduplication and confirmability are the same predicate evaluated at two stations} (\texttt{dedup\_is\_confirmability}). The erasure triangle's impossibility edge follows in one line: DEDUP plus a public retained set hands the store's unification power to every content-holding adversary (\texttt{triangle\_edge}) --- the confirmation attack is a typing fact, not a clever construction.
+\end{corollary}
+
+\begin{corollary}[The correspondence, closed]\label{cor:closed}
+$\kappa1$ = clause (e); $\kappa2, \kappa3$ = clause (b) at content/event granularity; $\kappa5$ = clauses (b)+(c); $\kappa6$ = clause (d) plus retention; and $\kappa4$ is the same principle applied to the \emph{side-condition} scope $\sigma$ instead of $\kappa$: firing determined by premise payloads $\Rightarrow$ monotonicity (\texttt{step\_mono}, axiom-free), with seed-global features outside $\sigma$ exactly when maximality is demanded (Theorem~11 of \cite{growth}). Guarantees split into an injectivity family, monotone increasing in $\kappa$, and a coarseness family, antitone --- the lattice structure of \cite{Armstrong74} --- with the six rows as the boundary instances.
+\end{corollary}
+
+\begin{remark}[What is old, what is new]\label{rem:armstrong}
+Determinations are functional dependencies and the antitone lattice is Armstrong's closure theory \cite{Armstrong74}; this section claims no novelty there. Three things do not come from dependency theory: the \emph{recursive clause} --- addresses occurring inside their own determining features, where flat attribute models do not reach and where the development's one substantive converse (Theorem~\ref{thm:necessity}) had to live; the \emph{two-observer identification}, a security reading for which dependency theory has no station; and the \emph{min-entropy quantification} of failed determinations (\S\ref{sec:price}). The schemas themselves are one-line proofs by design: the theorem's content is that every row reduces to them \emph{except} the one that provably cannot. In an identity scheme, everything but recursion is bookkeeping; the recursion is where the theorems live.
+\end{remark}
+
+\begin{remark}[The schema audits its substrate]\label{rem:audit}
+Instantiating clause (a) on the reference implementation exposed a preimage-discipline subtlety: the atom constructor commits $(\text{kind}, \text{payload})$ only --- the descriptor argument is \emph{not} in the preimage, so equal payloads unify across descriptor arguments. The papers' invariant that the descriptor is a payload \emph{field} is precisely the discipline that makes this safe; an implementation violating it would acquire a history-dependent descriptor. Composites do commit the sign. The finding is recorded as a check in \texttt{verify\_unified.py}.
+\end{remark}
+
+\section{The verification ladder}\label{sec:verification}
+
+Every claim sits on the three-rung ladder of the companion papers. \emph{Rung 1 (paper):} all theorems above carry full proofs. \emph{Rung 2 (executable):} the finite claims are checked by programs shipped with the paper. \texttt{verify\_o1\_necessity.py} verifies Theorem~\ref{thm:necessity} exhaustively --- five-record stores against all $2^4$ deletion sets, over-deletion in every premises-uncommitted case, zero exceptions --- and the conservation law for $n=3..8$ ($1,5,16,42,99,219$ on both sides). \texttt{verify\_unified.py} re-checks all four determination schemas and both corollaries against the reference implementation (7/7), and earned its keep with a finding: the implementation's \texttt{gc.atom} commits \texttt{(kind, payload)} but not the descriptor argument, sound only under the papers' descriptor-as-payload-field invariant --- schema~(a) is precisely the audit that detects such gaps. \texttt{corpus\_o5.py} produces the \S\ref{sec:price} numbers (8636 sentences; duplicate mass $39/8636=0.45\%$; source-aware confirmation $2^{13.07}$ hashes; $\lambda{=}128$ salting; epoch semantics demonstrated: same-era dedup, cross-era freshness, re-add). \emph{Rung 3 (kernel):} the shared development \texttt{GrowthClosure\_kappa.lean} compiles with one command on Lean~4.30.0 --- exit~0, no \texttt{sorry}, no \texttt{mathlib} --- and the axiom audit for this paper's namespaces, re-run on the submitted file, reads verbatim:
+
+\begin{quote}\footnotesize\ttfamily
+'Growth.Necessity.necessity' depends on axioms: [propext]\\
+'Growth.Necessity.counting\_exact' depends on axioms: [propext]\\
+'Growth.Necessity.witness\_overdelete' depends on axioms: [propext]\\
+'Growth.Epoch.epoch\_readd' does not depend on any axioms\\
+'Growth.Epoch.epoch\_fresh' does not depend on any axioms\\
+'Growth.Unified.unify\_iff' does not depend on any axioms\\
+'Growth.Unified.dedup\_iff' does not depend on any axioms\\
+'Growth.Unified.stable\_iff' does not depend on any axioms\\
+'Growth.Unified.confirm\_of\_det' does not depend on any axioms\\
+'Growth.Unified.dedup\_is\_confirmability' does not depend on any axioms\\
+'Growth.Unified.triangle\_edge' does not depend on any axioms
+\end{quote}
+
+\noindent The twenty inherited declarations of the growth and deletion namespaces audit as in the companions: \texttt{conservativity}, \texttt{galois}, \texttt{descent}, \texttt{step\_mono}, \texttt{step\_finitary}, and the 2P/survivor lemmas axiom-free; the remainder on \texttt{[propext, Quot.sound]}; no \texttt{Classical.choice} anywhere in the development. One cosmetic linter warning (an unused variable) is the file's entire diagnostic output.
+
+\section{Related work and placement}\label{sec:related}
+
+\textbf{Monotonicity boundaries.} CALM and its proof \cite{Hellerstein10,AmelootNV13} fix the order and quantify over queries; Bloom$^L$ \cite{Conway12} extends the analysis to arbitrary lattices and cross-lattice morphisms --- the 2P product order of \cite{deletion} is an instance of that move; monotone \emph{queries} over CRDTs \cite{Laddad22}, free termination \cite{Power25}, and coordination with global knowledge \cite{BaccaertKetsman23} extend the same axis. None of these has a notion of part identity; the correspondence adds the orthogonal axis and recovers $\kappa$4 as its CALM slice.
+
+\textbf{Deduplication security.} The confirmation attack against production cloud dedup is \cite{Harnik10}; dedup as an access oracle is \cite{Halevi11}; the DEDUP/confidentiality edge is formalized as message-locked encryption \cite{Douceur02,BKR13mle,Bellare13}. Corollary~\ref{cor:twoobs} types these as one determination at two stations; the AUDIT vertex and the triangle's tightness are new here.
+
+\textbf{History independence.} Introduced for data structures by \cite{Micciancio97} and formalized as anti-persistence by \cite{NaorTeague01} --- whose motivation already includes the privacy of \emph{deleted} data, the ancestor of DEN; strong history independence is characterized by canonical representations \cite{Hartline02}. The bridge: content addressing supplies a canonical representation for free, so the canonical serialization of \cite{growth} makes the store strongly history-independent in exactly the \cite{Hartline02} sense --- an instance gained, at the logical-state rather than memory-representation level. The systems taxonomy of erasure is \cite{Reardon13}; the identity-layer cut (what \emph{addresses} retain) is this paper's addition.
+
+\textbf{Deletion propagation and provenance.} Complexity dichotomies for side-effect-minimizing deletion are \cite{BKT02,KVW12}; provenance semirings \cite{GKT07} systematize derivation bookkeeping and its incremental maintenance. The cone theorem and Corollary~\ref{cor:dichotomy} sit exactly between them: inscription makes propagation trivial; renouncing inscription lands in the provenance regime, paying the conserved blow-up there.
+
+\textbf{Deployed identity schemes.} The Nix store's input-addressed vs content-addressed derivations \cite{Dolstra06,NixRFC062} instantiate the dial at ecosystem scale (\S\ref{sec:dial}); Merkle-CRDTs and Git/IPFS supply the storage lineage already placed in \cite{growth}. Determinations are functional dependencies \cite{Armstrong74}; the recursive clause is the part of identity outside that flat model.
+
+\section{Limitations and scope}\label{sec:limitations}
+
+Five boundaries, stated plainly. \emph{(1)} The schemas are elementary by design; a reader who wants hardness will find it only in the recursive clause and in the impossibility results inherited from \cite{growth,deletion}. \emph{(2)} Everything is conditional on the companion papers' rule format and hypotheses H1--H4; the discipline is varied, the generation model is not. \emph{(3)} The corpus instrumentation is a single English text, illustrative rather than statistical; the exchange-rate arithmetic, not the corpus, carries the claim. \emph{(4)} The confirmation bound is the standard min-entropy argument; the paper's addition is its placement, not its strength. \emph{(5)} One related-work citation (build-systems early-cutoff theory) is flagged for verification at camera-ready, and the residual sweep list --- Unison's content-addressed code model, formal Git/IPLD semantics, incremental chase maintenance --- is recorded in the ancillary sweep document.
+
+\section{Conclusion}\label{sec:conclusion}
+
+All six rows of the correspondence are resolved and derived from one statement: $\kappa$1 in both directions, with the converse kernel-checked (\S\ref{sec:o1}); $\kappa$2/$\kappa$3/$\kappa$6 by the erasure triangle (\S\ref{sec:triangle}), whose impossibility edge re-derives as \texttt{triangle\_edge}; $\kappa$4 by the $\sigma$-column of Corollary~\ref{cor:closed}; $\kappa$5 by the tag dial (\S\ref{sec:dial}); the quantitative face by \S\ref{sec:price}; and the whole by the Determination Theorem (\S\ref{sec:determination}), all four schemas and both corollaries axiom-free. What a closure store can deduplicate, what it must reveal, what it can deny, and what deletion costs are not separate engineering facts: they are one functional dependency read at different stations, with the recursive clause --- premises in the address --- as the one part of identity the flat framework cannot see. The discipline, not the data, is the design surface.
+
+\begin{thebibliography}{9}\small
+\bibitem{growth} B.~Sour. \emph{Monotone Growth of Content-Addressed Rule Closures.} Working paper v2, 2026 (in preparation).
+\bibitem{deletion} B.~Sour. \emph{Principled Deletion in Content-Addressed Rule Closures.} Working paper v1.1, 2026 (in preparation).
+\bibitem{Armstrong74} W.~W.~Armstrong. Dependency structures of data base relationships. \emph{IFIP Congress} 1974.
+\bibitem{GuptaMS93} A.~Gupta, I.~S.~Mumick, V.~S.~Subrahmanian. Maintaining views incrementally. \emph{SIGMOD} 1993.
+\bibitem{Hellerstein10} J.~M.~Hellerstein. The declarative imperative. \emph{SIGMOD Record} 39(1), 2010.
+\bibitem{AmelootNV13} T.~J.~Ameloot, F.~Neven, J.~Van den Bussche. Relational transducers for declarative networking. \emph{J.~ACM} 60(2), 2013.
+\bibitem{Harnik10} D.~Harnik, B.~Pinkas, A.~Shulman-Peleg. Side channels in cloud services: deduplication in cloud storage. \emph{IEEE Security \& Privacy} 8(6), 2010.
+\bibitem{Halevi11} S.~Halevi, D.~Harnik, B.~Pinkas, A.~Shulman-Peleg. Proofs of ownership in remote storage systems. \emph{CCS} 2011.
+\bibitem{BKR13mle} M.~Bellare, S.~Keelveedhi, T.~Ristenpart. Message-locked encryption and secure deduplication. \emph{EUROCRYPT} 2013.
+\bibitem{Micciancio97} D.~Micciancio. Oblivious data structures: applications to cryptography. \emph{STOC} 1997.
+\bibitem{NaorTeague01} M.~Naor, V.~Teague. Anti-persistence: history independent data structures. \emph{STOC} 2001.
+\bibitem{Hartline02} J.~D.~Hartline et al. Characterizing history independent data structures. \emph{ISAAC} 2002.
+\bibitem{Reardon13} J.~Reardon, D.~Basin, S.~\v{C}apkun. SoK: secure data deletion. \emph{IEEE S\&P} 2013.
+\bibitem{BKT02} P.~Buneman, S.~Khanna, W.-C.~Tan. On propagation of deletions and annotations through views. \emph{PODS} 2002.
+\bibitem{KVW12} B.~Kimelfeld, J.~Vondr\'ak, R.~Williams. Maximizing conjunctive views in deletion propagation. \emph{ACM TODS} (PODS line, 2011--2013).
+\bibitem{GKT07} T.~J.~Green, G.~Karvounarakis, V.~Tannen. Provenance semirings. \emph{PODS} 2007.
+\bibitem{Conway12} N.~Conway, W.~R.~Marczak, P.~Alvaro, J.~M.~Hellerstein, D.~Maier. Logic and lattices for distributed programming. \emph{SoCC} 2012.
+\bibitem{Laddad22} S.~Laddad, C.~Power, M.~Milano, A.~Cheung, N.~Crooks, J.~M.~Hellerstein. Keep CALM and CRDT on. \emph{PVLDB} 16(4), 2022.
+\bibitem{Power25} C.~Power. Free termination. \emph{ICDT} 2025.
+\bibitem{BaccaertKetsman23} T.~Baccaert, B.~Ketsman. Distributed consistency beyond queries. \emph{PODS} 2023.
+\bibitem{Dolstra06} E.~Dolstra. \emph{The Purely Functional Software Deployment Model.} PhD thesis, Utrecht University, 2006.
+\bibitem{NixRFC062} T.~G\'erard et al. NixOS RFC 0062: content-addressed paths. 2019--.
+\bibitem{Douceur02} J.~R.~Douceur et al. Reclaiming space from duplicate files in a serverless distributed file system. \emph{ICDCS} 2002.
+\bibitem{RogawayShrimpton04} P.~Rogaway, T.~Shrimpton. Cryptographic hash-function basics. \emph{FSE} 2004.
+\bibitem{Bellare13} M.~Bellare, S.~Keelveedhi, T.~Ristenpart. DupLESS: server-aided encryption for deduplicated storage. \emph{USENIX Security} 2013.
+\end{thebibliography}
+
+\end{document}

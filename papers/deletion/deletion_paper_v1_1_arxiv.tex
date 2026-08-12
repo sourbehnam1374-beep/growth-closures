@@ -1,0 +1,472 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.05in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\K}{\mathsf{K}}
+\newcommand{\Up}{\mathrm{Up}}
+\newcommand{\supp}{\mathrm{supp}}
+\newcommand{\diffop}{\setminus}
+\newcommand{\sub}{\subseteq}
+
+\title{\textbf{Principled Deletion in Content-Addressed Rule Closures}}
+\author{Behnam Sour, MD\\[2pt]
+\small Bone and Joint Reconstruction Research Center, Iran University of Medical Sciences, Tehran, Iran\\
+\small Shafa Yahyaeian Hospital, Tehran, Iran\\
+\small ORCID: 0009-0002-3176-1956 \quad\textbar\quad \texttt{sourbehnam1374@gmail.com}}
+\date{Version 1.0 --- June 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Content-addressed knowledge stores that grow by least-fixpoint rule closure are append-only by construction: the growth theory of the companion paper~\cite{growth} shows that conservativity, history independence, and incremental locality all flow from monotonicity, and that the natural non-monotone request already breaks them. Yet redaction obligations --- erasure rights, court orders, consent withdrawal, error correction --- are real. This paper develops the deletion theory of such stores. The structural key is that content addressing \emph{inscribes derivations}: every generated part names its premises inside its own address preimage, so derivations are unique and the support of a part is a payload-local traversal. From this we prove the \textbf{cone theorem}: deleting atoms $D$ from a closed store removes \emph{exactly} the upward cone $\Up(D)$, so epoch re-closure and incremental cone excision coincide bit-for-bit, survivors keep their exact addresses, and the alternative-derivation accounting that dominates classical view maintenance (DRed) vanishes structurally. We then prove what deletion costs: under maximal-parsimony views, deletions \emph{insert} (the same four-atom witness of the companion paper runs in reverse --- the retracted address \texttt{362db034e4f1}\ldots\ reappears); and no payload-determined rule system expresses deletion over the plain subset order at all. Two escapes exhaust the options: coordinate (epochs) or extend the order --- the two-phase closure over $(\text{adds},\sub)\times(\text{removes},\supseteq)$, which we prove monotone, confluent under remove-wins, and permanently tombstoning. An erasure analysis separates the policies physically: tombstones retain payloads; excision and epochs erase; address-only tombstones audit deletions at a quantified deniability cost. The lattice-level core (survivor stability, product monotonicity, order-freedom, tombstone permanence) is kernel-checked in the same self-contained constructive Lean~4 development as the growth theory --- the first two axiom-free; the derivation-level cone theorem is proved on paper and machine-checked by a 12-item ledger and 600 randomized property instances. Empirically, cone excision beats epoch re-closure by $4.8$--$8.3\times$ with bit-identical fingerprints, and on a natural corpus the worst single-atom deletion touches ${\sim}10^{80.85}$ parts under complete semantics but exactly $4$ materialized parts under the quotient representation --- while $58.1\%$ of single deletions trigger a view insertion.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+
+The companion paper~\cite{growth} develops the growth theory of content-addressed rule closures: a store whose parts occupy a typed tower $\mathsf{Atom} < \mathsf{Block} < \mathsf{Section} < \mathsf{Root}$, whose addresses are collision-resistant hashes of payloads and child addresses (Merkle-DAG identity~\cite{Merkle87,Sanjuan20}), and whose derived content is the least fixpoint $\K(S)$ of finitary, payload-determined, stratified rules over a seed $S$ of atoms. Under those hypotheses (H1--H4 below) growth is conservative, history-independent, incremental, and continuous --- and the boundary of that comfort is the CALM boundary~\cite{Hellerstein10,AmelootNV13}: the one natural non-monotone request, \emph{store only maximal bindings}, is impossible for payload-determined rules, and its cost in a content-addressed store is the retraction of named, referenced parts.
+
+Growth-only, however, is a legal and operational fiction. The right to erasure (Regulation (EU) 2016/679, Art.~17~\cite{GDPR}) applies to personal data regardless of the elegance of the data structure that holds it; the tension between erasure and content-addressed immutability is by now a documented regulatory problem~\cite{Finck19}. Court orders, consent withdrawal, and plain error correction raise the same demand. Systems answer it today ad hoc: tombstone flags, garbage-collection epochs, key destruction. This paper asks what the closure theory itself says.
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=1.4em, itemsep=1pt]
+\item \textbf{Derivation structure} (\S\ref{sec:derivation}). Content addressing under our rule format is \emph{premise-inscribing}: a generated part's address commits to its full premise list. Consequently derivations are unique (Lemma~\ref{lem:single}) and the atom support of any part is computable by a local Merkle traversal --- no global state, no provenance side-table.
+\item \textbf{The cone theorem} (\S\ref{sec:cone}). $\K(S \diffop D) = \K(S) \setminus \Up(D)$: deletion removes exactly the upward cone of the deleted atoms (Theorem~\ref{thm:cone}). Three corollaries do the practical work: survivors keep their exact addresses (Corollary~\ref{cor:stability}); deletion is computable cone-locally with no re-closure pass --- \emph{semi-naive deletion} (Corollary~\ref{cor:locality}); and the alternative-derivation accounting of DRed-style view maintenance~\cite{GuptaMS93} vanishes, because the derivation count is structurally one.
+\item \textbf{What deletion costs} (\S\ref{sec:anomaly}). Under maximal-parsimony serialization, deletions \emph{insert}: the companion paper's witness runs in reverse, and the address retracted by growth reappears under deletion (Theorem~\ref{thm:anomaly}). More fundamentally, no payload-determined rule system expresses deletion over the plain subset order (Theorem~\ref{thm:dichotomy}); the only escapes are coordination (epochs) or extending the order.
+\item \textbf{The two-phase closure} (\S\ref{sec:twop}). Taking the second escape: over the product order $(\text{adds},\sub)\times(\text{removes},\supseteq)$, the live store $\K(A \diffop R)$ is monotone (Theorem~\ref{thm:product}), confluent over operation interleavings under remove-wins (Theorem~\ref{thm:orderfree}) --- and permanently tombstoning (Proposition~\ref{prop:noreadd}). This is the closure-theoretic content of the 2P-set construction~\cite{Shapiro11}, now with derived knowledge on top.
+\item \textbf{Erasure analysis} (\S\ref{sec:erasure}). A retention model separates the policies physically: tombstones retain removed payloads (visible-store correctness without erasure); excision and epochs erase; \emph{address-only} tombstones support deletion audits at a deniability cost quantified by payload min-entropy, with a dilemma between deduplication and deniable erasure (Remark~\ref{rem:entropy}).
+\item \textbf{Verification and measurement} (\S\ref{sec:verify}, \S\ref{sec:empirics}). The lattice-level core is kernel-checked in the same self-contained constructive Lean~4 development as the growth theory; survivor stability and product monotonicity are axiom-free. A 12-item machine ledger and 600 randomized property instances check everything including the derivation level. Cone excision beats epoch re-closure by $4.8$--$8.3\times$ at bit-identical fingerprints; corpus-scale deletion analytics quantify the materialized-vs-complete gap and the anomaly frequency.
+\end{enumerate}
+
+All artifacts --- reference implementation, property suite, benchmarks, and the extended Lean file --- accompany this paper; every number below that is not a citation is produced by them.
+
+\section{Preliminaries}\label{sec:prelim}
+
+We use the setting of~\cite{growth}, summarized for self-containment. The universe $U$ holds typed parts; an \emph{atom} carries an ingested payload and a descriptor; composites are generated by four rules ($\mathsf{bind}$: $m \ge 3$ atoms sharing a descriptor, gated by an MDL code-length test; $\mathsf{lift}$, $\mathsf{frame}$, $\mathsf{close}$ assemble the upper levels). The address of a part is a SHA-256 hash of its kind, rule, sign, and the sorted list of its children's addresses; an atom's address hashes its payload. The standing hypotheses:
+
+\begin{itemize}[leftmargin=1.6em, itemsep=0pt]
+\item[\textbf{H1}] (finitary) each rule instance has finitely many premises;
+\item[\textbf{H2}] (payload-determined) whether an instance fires is a function of its premises' payloads only;
+\item[\textbf{H3}] (stratified) generation strictly ascends the tower; no cycles;
+\item[\textbf{H4}] (injective addressing) the address function is injective on parts (collision resistance of SHA-256, the single extra-mathematical assumption of both papers).
+\end{itemize}
+
+$\Phi$ denotes the one-step operator and $\K(S)$ its least fixpoint over seed $S$. From~\cite{growth} we use: $\K$ is a closure operator (T1); \emph{conservativity}: $S \sub S' \Rightarrow \K(S) \sub \K(S')$ with surviving parts at identical addresses (T2); \emph{incrementality}: $\K(S \cup D) = \K(\K(S) \cup D)$, computable frontier-locally (T3--T4); \emph{history independence} of the canonical fingerprint (T5); and the impossibility of payload-determined maximal parsimony (T11). Throughout, $S \diffop D$ is set difference on atoms with $D \sub S$.
+
+\section{Derivation structure}\label{sec:derivation}
+
+\begin{definition}[Premise-inscribing rules]\label{def:inscribe}
+A rule format is \emph{premise-inscribing} if the address preimage of every generated part contains the addresses of all premises of the generating instance.
+\end{definition}
+
+The four rules of the system are premise-inscribing by construction: $\mathsf{bind}$ writes the sorted kernel-atom addresses, $\mathsf{lift}$ and $\mathsf{frame}$ the single child, $\mathsf{close}$ the section list. This is not an implementation accident but the substance of Merkle identity: a part \emph{is} (the hash of) its derivation interface.
+
+\begin{lemma}[Single derivation]\label{lem:single}
+Under H2--H4 and premise-inscribing rules, every part $p \in \K(S)$ has exactly one derivation: a unique generating rule instance, hence (by induction along H3) a unique derivation tree whose leaves are atoms of $S$.
+\end{lemma}
+
+\begin{proof}
+Suppose instances $\iota_1, \iota_2$ both generate $p$. Each writes its rule tag and full premise address list into the address preimage (Definition~\ref{def:inscribe}); by H4 equal addresses force equal preimages, so $\iota_1$ and $\iota_2$ have the same rule and the same premises, i.e.\ $\iota_1 = \iota_2$. Uniqueness of the tree follows by structural induction along the strict stratification H3, which terminates at atoms.
+\end{proof}
+
+\begin{definition}[Support; upward cone]\label{def:supp}
+For $p \in \K(S)$, $\supp(p) \sub S$ is the set of atoms at the leaves of $p$'s unique derivation tree; for an atom $a$, $\supp(a) = \{a\}$. For $D \sub S$,
+\[ \Up(D) \;=\; \{\, p \in \K(S) : \supp(p) \cap D \neq \emptyset \,\}. \]
+\end{definition}
+
+By Lemma~\ref{lem:single}, $\supp(p)$ is computed by traversing $p$'s own child pointers --- a payload-local operation requiring no global index and no provenance metadata. (Computing $\Up(D)$ over a \emph{materialized} store benefits from an inverted child-to-parent index; the index is a cache, not content, and its absence changes cost, never semantics.)
+
+\section{The cone theorem}\label{sec:cone}
+
+\begin{theorem}[Cone theorem]\label{thm:cone}
+Under H1--H4 and premise-inscribing rules, for every seed $S$ and $D \sub S$:
+\[ \K(S \diffop D) \;=\; \K(S) \,\setminus\, \Up(D). \]
+\end{theorem}
+
+\begin{proof}
+($\sub$) Conservativity applied to $S \diffop D \sub S$ gives $\K(S \diffop D) \sub \K(S)$. Let $p \in \K(S \diffop D)$. Its unique derivation tree (Lemma~\ref{lem:single}, applied in the store over $S \diffop D$) has leaves in $S \diffop D$; by H4 this is the same tree as $p$'s derivation in $\K(S)$ --- the address pins the tree --- so $\supp(p) \sub S \diffop D$, i.e.\ $p \notin \Up(D)$.
+
+($\supseteq$) Let $p \in \K(S)$ with $\supp(p) \cap D = \emptyset$. Every node $q$ of $p$'s derivation tree satisfies $\supp(q) \sub \supp(p) \sub S \diffop D$. By induction along H3: the leaves are atoms of $S \diffop D$; each internal node's generating instance has all premises already established in $\K(S \diffop D)$ by the induction hypothesis, and fires there by H2 (firing depends only on premise payloads, which are unchanged). Hence $p \in \K(S \diffop D)$.
+\end{proof}
+
+\begin{corollary}[Survivor stability]\label{cor:stability}
+Deletion never disturbs survivors: every part of $\K(S \diffop D)$ exists in $\K(S)$ with the identical address, payload, and child list. The damage of a deletion is confined, definitionally, to the cone.
+\end{corollary}
+
+\begin{proof}
+$\K(S\diffop D) \sub \K(S)$ by Theorem~\ref{thm:cone}; identity of records is H4 plus the fact that addresses pin preimages.
+\end{proof}
+
+\begin{corollary}[Semi-naive deletion]\label{cor:locality}
+$\K(S \diffop D)$ is computable from the materialized $\K(S)$ by removing $\Up(D)$ --- one support pass, no re-closure, no rederivation check. Epoch re-closure (recomputing $\K(S \diffop D)$ from scratch) and cone excision produce bit-identical canonical fingerprints.
+\end{corollary}
+
+\begin{remark}[DRed collapses]\label{rem:dred}
+Classical incremental view maintenance under deletion (DRed~\cite{GuptaMS93}) over-deletes everything derivable from the deleted facts and then \emph{re-derives} what has an alternative derivation; counting variants maintain derivation multiplicities for the same reason. Lemma~\ref{lem:single} makes the multiplicity structurally $1$: in a premise-inscribing content-addressed closure there are no alternative derivations to re-derive, so over-deletion \emph{is} exact deletion. The hard half of DRed is not optimized away here --- it is absent by construction. (The price was paid upstream: a part derived two ways would be two parts, at two addresses; identity splits where provenance differs.)
+\end{remark}
+
+\section{What deletion costs}\label{sec:anomaly}
+
+The complete field behaves perfectly under deletion --- it only shrinks (Theorem~\ref{thm:cone} gives $\K(S \diffop D) \sub \K(S)$ directly). The parsimonious \emph{views} of~\cite{growth} do not.
+
+\begin{theorem}[Deletion anomaly]\label{thm:anomaly}
+Under the subsumption-quotient serialization (store the complete field; serialize only non-subsumed bindings), there exist $S$ and $D \sub S$ with
+\[ \mathrm{Ser}\big(\K(S \diffop D)\big) \;\not\sub\; \mathrm{Ser}\big(\K(S)\big): \]
+deleting atoms inserts serialized parts.
+\end{theorem}
+
+\begin{proof}
+The witness of~\cite{growth}, run in reverse. Take the cohort $a_1,\dots,a_4$ on one descriptor, $S = \{a_1,\dots,a_4\}$, $D = \{a_4\}$. In $\K(S)$ the unique maximal binding is $B_{1234}$, so $B_{123} \notin \mathrm{Ser}(\K(S))$. In $\K(S \diffop D)$ the maximal binding is $B_{123}$, so $B_{123} \in \mathrm{Ser}(\K(S \diffop D))$. Executed on the reference implementation with the companion paper's constants, the inserted part materializes at address \texttt{362db034e4f1}\ldots\ --- precisely the address whose \emph{retraction under growth} witnessed the impossibility theorem there. The same four atoms witness both directions of the trilemma.
+\end{proof}
+
+The anomaly is not a corner case. On the natural corpus of \S\ref{sec:empirics}, $58.1\%$ of single-atom deletions trigger a view insertion: deletion inserts \emph{more often than not}.
+
+% ======================================================================
+% DROP-IN for deletion_paper_v1.tex, Section 5 (\S\ref{sec:anomaly}).
+% Splice point: immediately AFTER the paragraph following Theorem
+% \ref{thm:anomaly} ("The anomaly is not a corner case. ... 58.1% ...").
+% Then REPLACE that paragraph's last sentence with the pointer sentence
+% given at the bottom of this file, and apply the abstract edit there too.
+% Uses only macros already in the preamble: \K, \Up, \supp, \diffop, \sub,
+% and the shared theorem counter (theorem/corollary/remark).
+% Verified: 398 single-atom + 300 multi-atom randomized instances, 0
+% counterexamples; corpus identity 5014/8631 = 58.1% exact (see
+% test_anomaly_characterization.py, checks P13--P14 and DEL-13).
+% ======================================================================
+
+The anomaly admits an exact law. Write $C_c \sub S$ for the cohort of
+descriptor $c$, $n_c = |C_c|$, $k_c = |D \cap C_c|$, and
+$\tau = \max(3, m_0)$ for the admissibility threshold; recall that for
+$b > r$ the saving $\Delta(c,m)$ is strictly increasing in $m$
+(companion paper, Prop.~10), so a cohort of size $n \ge \tau$ has the
+\emph{full-cohort binding} $B_{C_c}$ as its unique $\sub$-maximal
+admissible binding, and the quotient serialization keeps exactly that
+binding's cone. Everything about when deletion inserts follows from
+this single observation.
+
+\begin{theorem}[Anomaly characterization]\label{thm:anomalychar}
+Assume $b > r$ and the subsumption-quotient serialization
+$\mathrm{Ser}$. For every seed $S$ and $D \sub S$,
+\[
+\mathrm{Ser}\big(\K(S \diffop D)\big) \;\setminus\;
+\mathrm{Ser}\big(\K(S)\big)
+\;=\;
+\bigsqcup_{\substack{c \,:\; k_c \ge 1 \\ n_c - k_c \ge \tau}}
+\mathrm{cone}\big(B_{C_c \diffop D}\big),
+\]
+where $\mathrm{cone}(B) = \{B,\ \mathsf{lift}(B),\ \mathsf{frame}(B)\}$.
+In particular: (i) deletion inserts serialized parts \emph{iff} some
+cohort is touched ($k_c \ge 1$) and remains bindable
+($n_c - k_c \ge \tau$); (ii) insertions arrive in disjoint cones of
+exactly three parts, one per such cohort; (iii) the inserted binding's
+address is the content address of the surviving cohort, computable
+before the deletion is executed.
+\end{theorem}
+
+\begin{proof}
+Under $b > r$, every subset of size $m \in [\tau, n]$ of a cohort of
+size $n$ is admissible and is strictly subsumed by the full cohort;
+cohorts of size $< \tau$ generate nothing. Hence
+$\mathrm{Ser}(\K(S))$ contains, per cohort with $n_c \ge \tau$,
+precisely $\mathrm{cone}(B_{C_c})$, and
+$\mathrm{Ser}(\K(S \diffop D))$ contains, per cohort with
+$n_c - k_c \ge \tau$, precisely $\mathrm{cone}(B_{C_c \diffop D})$;
+$\mathsf{lift}$ and $\mathsf{frame}$ are unary, so each kept binding
+contributes exactly its three-part cone, and cones at distinct
+descriptors are disjoint (addresses inscribe the descriptor; H4).
+Taking the difference at descriptor $c$: the new cone is absent from
+the old serialization iff $B_{C_c \diffop D} \neq B_{C_c}$, which by
+H4 (addresses pin premise sets) holds iff $k_c \ge 1$; and it exists
+iff $n_c - k_c \ge \tau$. Untouched or no-longer-bindable cohorts
+contribute nothing new.
+\end{proof}
+
+\begin{corollary}[Single deletions; the anomaly frequency is a
+cohort-histogram functional]\label{cor:frequency}
+For a single-atom deletion $D = \{a\}$: insertion occurs iff
+$n_{c(a)} \ge \tau + 1 = \max(4,\, m_0 + 1)$, in which case exactly one
+cone of three parts is inserted. Consequently, deleting an atom chosen
+uniformly from $S$,
+\[
+\Pr[\text{view insertion}]
+\;=\;
+\frac{1}{|S|} \sum_{c \,:\; n_c \ge \tau + 1} n_c ,
+\]
+a closed-form functional of the cohort-size histogram alone --- no
+closure need be computed. On the corpus of
+\S\ref{sec:empirics} ($\tau = 3$): atoms in cohorts of size $\ge 4$
+number $5014$ of $8631$, i.e.\ $58.1\%$ --- equal, to the reported
+precision, to the measured anomaly frequency. The measurement of
+\S\ref{sec:empirics} is Theorem~\ref{thm:anomalychar} evaluated on the
+histogram.
+\end{corollary}
+
+\begin{remark}[Scope]\label{rem:anomalyscope}
+The characterization uses $b > r$, which makes per-cohort maximality
+unique. For $b \le r$, admissibility is not upward-closed in $m$ and a
+cohort's maximal admissible bindings form an antichain of equal-size
+subsets; the analogous law holds with ``the full-cohort binding''
+replaced by that antichain, at the cost of cones no longer being
+singletons per cohort. All measurements in this paper, and Prop.~10 of
+the companion paper, operate in the $b > r$ regime.
+\end{remark}
+
+% ----------------------------------------------------------------------
+% EDIT 1 — replace the sentence "The anomaly is not a corner case. On
+% the natural corpus of \S\ref{sec:empirics}, $58.1\%$ of single-atom
+% deletions trigger a view insertion: deletion inserts \emph{more often
+% than not}."  WITH:
+%
+%   The anomaly is not a corner case, and it is not merely empirical:
+%   Theorem~\ref{thm:anomalychar} characterizes exactly when it fires,
+%   and Corollary~\ref{cor:frequency} reduces its frequency to a
+%   closed-form functional of the cohort-size histogram --- on the
+%   corpus of \S\ref{sec:empirics}, $5014/8631 = 58.1\%$ of single-atom
+%   deletions insert, more often than not, with the measured and the
+%   computed value coinciding to the reported precision.
+%
+% EDIT 2 — abstract, replace "--- while $58.1\%$ of single deletions
+% trigger a view insertion." WITH:
+%
+%   --- while single-atom deletions insert into the view exactly when
+%   the atom's cohort has $\ge 4$ members (a characterization theorem),
+%   making the anomaly frequency a closed-form functional of the
+%   cohort-size histogram: $58.1\%$ on this corpus, computed and
+%   measured.
+%
+% EDIT 3 — \S Verification: register two new property checks
+% (P13 single-atom iff; P14 general per-cohort exact-cone law) and
+% ledger item DEL-13; artifact: test_anomaly_characterization.py.
+% ----------------------------------------------------------------------
+
+
+\begin{theorem}[Deletion dichotomy]\label{thm:dichotomy}
+No payload-determined rule system, operating over the plain subset order on seeds, realizes a deletion semantics --- i.e.\ a map from operation logs to stores under which removals strictly shrink the visible store on some input. Consequently any deletion-capable design must either (i) leave the payload-determined class at deletion points (\emph{coordinate}: epoch barriers), or (ii) extend the order on states (\emph{the two-phase product order of \S\ref{sec:twop}}).
+\end{theorem}
+
+\begin{proof}
+By the monotonicity theorem of~\cite{growth} (mechanized there as the axiom-free \texttt{step\_mono}), every payload-determined one-step operator is monotone, hence so is its closure: over the plain order, growing the ingested set can never shrink the store. A removal presented as ingestion (the only interface the plain order offers) therefore cannot decrease anything; the four-atom configuration above is a concrete input on which the required strict shrink fails. Option (i) abandons obliviousness exactly at deletion points --- an epoch is a global agreement on a cut, i.e.\ coordination in the CALM sense~\cite{Hellerstein10,AmelootNV13}; option (ii) changes what ``growing'' means, and \S\ref{sec:twop} shows it suffices. The dichotomy is the deletion-side instance of the CALM boundary, in the same localized sense as the companion paper's Theorem~11: the boundary is CALM's; the content-addressed formulation --- what coordination-freedom costs in \emph{identity} and \emph{retention} --- is what this setting adds.
+\end{proof}
+
+\section{The two-phase closure}\label{sec:twop}
+
+Escape (ii) made precise. A \emph{two-phase (2P) state} is a pair $(A, R)$ of grow-only sets --- adds and removes --- ordered by the product of $\sub$ on $A$ and $\supseteq$ on $R$; the \emph{live store} is $\K(A \diffop R)$. Remove-wins is built into $\diffop$. This is the 2P-set of the CRDT literature~\cite{Shapiro11} lifted from elements to closures: the novelty needed here is that the entire derived superstructure inherits the good behavior.
+
+\begin{theorem}[Product monotonicity]\label{thm:product}
+If $A \sub A'$ and $R' \sub R$ then $\K(A \diffop R) \sub \K(A' \diffop R')$. The live store is monotone over the 2P order; in particular every part of the live store keeps its exact address along any 2P-increasing history.
+\end{theorem}
+
+\begin{proof}
+$A \diffop R \sub A' \diffop R'$ pointwise (membership in $A$ strengthens; non-membership in $R$ weakens contravariantly), then conservativity. Mechanized axiom-free as \texttt{twoP\_mono} (\S\ref{sec:verify}).
+\end{proof}
+
+\begin{theorem}[Order-freedom under remove-wins]\label{thm:orderfree}
+Let an operation log be a list of add-batches and remove-batches, and let the 2P semantics fold the log to $(A, R) = (\bigcup \text{adds}, \bigcup \text{removes})$. Then the live store depends only on the multiset of operations: any interleaving yields the identical canonical fingerprint. Without remove-wins this fails: under last-operation-wins state semantics, the two interleavings of $\{\text{add } a, \text{remove } a\}$ yield different stores.
+\end{theorem}
+
+\begin{proof}
+The fold is a commutative-monoid aggregation in each coordinate; mechanized as \texttt{live\_swap} (segment transpositions, which generate all permutations, leave the live store unchanged --- propext and quotient soundness only). The failure half is two executions: add-then-remove gives $a$ dead in both semantics; remove-then-add gives $a$ live under last-wins and dead under 2P (machine check DEL-11 exhibits the diverging fingerprints).
+\end{proof}
+
+\begin{proposition}[Tombstone permanence]\label{prop:noreadd}
+If $a \in R$ then $\K((A \cup \{a\}) \diffop R) = \K(A \diffop R)$: re-ingesting a removed atom is a no-op. Restoration of a removed atom under 2P therefore requires either an epoch reset or a fresh identity (a re-keyed payload), with the consequences of Remark~\ref{rem:entropy}.
+\end{proposition}
+
+\begin{proof}
+$(A \cup \{a\}) \diffop R = A \diffop R$ as sets when $a \in R$; apply $\K$. Mechanized as \texttt{tombstone\_permanence}.
+\end{proof}
+
+Deletion idempotence and commutation hold at the seed level for the same one-line reasons ($(S\diffop D)\diffop D = S \diffop D$; sequential differences merge to the union) and are mechanized as \texttt{deletion\_idem} and \texttt{deletion\_commute}; their store-level counterparts are checked at machine level (DEL-05, DEL-06).
+
+\section{Erasure: what is physically retained}\label{sec:erasure}
+
+Visible-store correctness and erasure are different properties. Define the \emph{retention} of a policy as the set of removed-part payloads recoverable from the physical store after the deletion completes.
+
+\begin{proposition}[Retention separates the policies]\label{prop:retention}
+\emph{Epoch re-closure} and \emph{cone excision} retain nothing of the cone: no removed payload survives the part records or the canonical serialization (machine check DEL-07 over randomized instances). \emph{Tombstones} (2P with retained content) keep the visible store identical to excision --- by Theorem~\ref{thm:cone} the close-then-filter and filter-then-close readings coincide --- while retaining every removed payload: correctness without erasure, which is precisely the configuration that Art.~17 obligations~\cite{GDPR} and the immutability--erasure tension~\cite{Finck19} target.
+\end{proposition}
+
+\begin{definition}[Address-only tombstones]\label{def:aot}
+Retain, for each removed part, its 64-hex address and nothing else; discard payloads and child lists. The retained address set supports a deletion \emph{audit}: one can prove a specific part existed and was removed (its address re-derives from a claimed preimage) without retaining the part.
+\end{definition}
+
+\begin{remark}[The deniability boundary, stated honestly]\label{rem:entropy}
+An address is a hash of content; preimage resistance~\cite{RogawayShrimpton04} prevents inversion but not \emph{verification of a guess}: an adversary holding a candidate payload can hash it and test membership in the retained address set. Address-only tombstones therefore provide erasure-with-deniability only up to the min-entropy of the removed payloads --- a sentence from a published book is one dictionary lookup away. The standard fix, salting atom payloads with ingestion nonces, restores deniability and destroys content addressing's central economy: two ingestions of the same content no longer share an address. \emph{Deduplication and deniable erasure pull against each other directly}; a store chooses, per corpus, which to keep. We flag this as a dilemma the formalism makes visible rather than one it resolves.
+\end{remark}
+
+The policy space, summarized:
+
+\begin{center}\small
+\begin{tabular}{lccccc}
+\toprule
+policy & visible store & coord.-free & survivor identity & erasure & audit \\
+\midrule
+epoch re-closure & $\K(S\diffop D)$ & no (barrier) & stable (Cor.~\ref{cor:stability}) & yes & no \\
+cone excision & $\K(S\diffop D)$ & no (barrier) & stable & yes & no \\
+tombstones (2P) & $\K(A\diffop R)$ & yes (Thm.~\ref{thm:product}--\ref{thm:orderfree}) & stable & \textbf{no} & yes \\
+address-only 2P & $\K(A\diffop R)$ & yes & stable & up to entropy & yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent One principle covers the table: \emph{survivor identity is never the price of deletion --- retention, coordination, and re-addability are.} Which of the three to pay is a policy decision the theory can now state exactly.
+
+\section{Empirics}\label{sec:empirics}
+
+\paragraph{Excision vs.\ epochs.} On the data model of the companion benchmark (cohort-capped random corpora, cap $5$; $|D| = 20$ random atoms; median of $5$ runs; reference implementation, no index optimizations), cone excision of the materialized $\K(S)$ against epoch re-closure of $S \diffop D$:
+
+\begin{center}\small
+\begin{tabular}{rrrr}
+\toprule
+$|S|$ & epoch (s) & excision (s) & speedup \\
+\midrule
+250 & 0.0193 & 0.0026 & $7.4\times$ \\
+500 & 0.0463 & 0.0055 & $8.3\times$ \\
+1000 & 0.1051 & 0.0137 & $7.7\times$ \\
+2000 & 0.2625 & 0.0330 & $8.0\times$ \\
+4000 & 0.5541 & 0.1143 & $4.8\times$ \\
+8000 & 1.2252 & 0.2240 & $5.5\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Canonical fingerprints of the two procedures are asserted bit-identical at every size --- the cone theorem, run live (Figure~\ref{fig:bench}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.66\linewidth]{figures/fig_delete_bench.pdf}
+\caption{Median wall time, epoch re-closure vs.\ cone excision, $|D|=20$, log--log. Fingerprint equality asserted at every point.}\label{fig:bench}
+\end{figure}
+
+\paragraph{Corpus-scale deletion.} On the Moby-Dick proxy of~\cite{growth} (atoms = $8{,}631$ sentences; descriptor = most frequent non-stopword token; the re-fetched corpus reproduces the committed statistics exactly: $3{,}078$ descriptors, $637$ bindable cohorts, maximal cohort $n = 268$), we analyze every possible single-atom deletion. The per-cohort mechanics are first verified on executed closures (a deletion inside a bindable cohort of size $n \ge 4$ removes exactly $4$ materialized parts --- atom, maximal block, section, root --- and inserts exactly $3$; at $n = 3$ the cohort dies: $4$ removed, $0$ inserted), then the exact integer combinatorics are evaluated over the cohort distribution:
+
+\begin{itemize}[leftmargin=1.6em, itemsep=1pt]
+\item \textbf{Worst-case complete cone:} deleting one atom of the $n{=}268$ cohort places ${\sim}10^{80.85}$ parts in $\Up(D)$ under complete semantics ($1 + 3\sum_{m=3}^{n}\binom{n-1}{m-1}$, exact integer evaluation) --- against exactly $4$ materialized parts under the quotient representation (mean $2.97$, median $4$, max $4$ over all $8{,}631$ deletions). The cone is astronomical extensionally and constant-size materially; deletion cost is a property of the \emph{representation}, with complete identity intact in both (every cone part has a well-defined address; H4 is a function, not a table). Figure~\ref{fig:cone} plots the gap.
+\item \textbf{Anomaly frequency:} $5{,}014$ of $8{,}631$ single-atom deletions ($58.1\%$) trigger a view insertion (the deleted atom sits in a bindable cohort of size $\ge 4$). Theorem~\ref{thm:anomaly} is the common case, not the corner.
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.66\linewidth]{figures/fig_delete_cone.pdf}
+\caption{Single-atom deletion cone by cohort size on the corpus: complete-semantics cone (log$_{10}$ parts, exact combinatorics) vs.\ the constant materialized quotient cone ($4$ parts).}\label{fig:cone}
+\end{figure}
+
+\section{Verification}\label{sec:verify}
+
+The claim ladder of~\cite{growth}, extended:
+
+\begin{center}\small
+\begin{tabular}{lll}
+\toprule
+rung & artifact & checks \\
+\midrule
+1 & \texttt{delete\_growth.py} (pure stdlib) & 12-item ledger, 12/12 PASS \\
+2 & \texttt{test\_delete\_properties.py} & 10 properties $\times$ 60 instances $=$ 600, all pass \\
+3 & \texttt{GrowthClosure.lean}, namespace \texttt{Deletion} & 6 theorems, kernel-checked \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The Lean development remains self-contained (no imports, no \texttt{mathlib}), fully constructive (no \texttt{Classical.choice} anywhere), and \texttt{sorry}-free. The compile-time axiom audit, verbatim:
+
+{\small
+\begin{verbatim}
+'Growth.Deletion.survivor_stability' does not depend on any axioms
+'Growth.Deletion.twoP_mono' does not depend on any axioms
+'Growth.Deletion.deletion_idem' depends on axioms: [propext, Quot.sound]
+'Growth.Deletion.deletion_commute' depends on axioms: [propext, Quot.sound]
+'Growth.Deletion.tombstone_permanence' depends on axioms: [propext, Quot.sound]
+'Growth.Deletion.live_swap' depends on axioms: [propext, Quot.sound]
+\end{verbatim}}
+
+\noindent\textbf{Perimeter, stated exactly.} The lattice level --- survivor stability, 2P product monotonicity, deletion idempotence and commutation, tombstone permanence, remove-wins order-freedom --- is kernel-checked above. The derivation level --- Lemma~\ref{lem:single} and the cone theorem, which require the premise-inscribing structure of the concrete rules --- is proved on paper (\S\ref{sec:cone}) and machine-checked at rungs 1--2 (the cone theorem as bit-identical fingerprints of excision vs.\ epochs, deterministic and over 60 randomized instances). Mechanizing the derivation level would require formalizing the address algebra; we leave it as the natural next step of the formalization, not of the mathematics. As in the companion paper, collision resistance of SHA-256 (H4) is the single assumption outside the mathematics~\cite{RogawayShrimpton04}.
+
+\section{Related work}\label{sec:related}
+
+\emph{Incremental view maintenance under deletion.} DRed~\cite{GuptaMS93} over-deletes and re-derives; counting methods track derivation multiplicities. \S\ref{sec:cone} shows both collapse under premise-inscribing content addressing: multiplicity is structurally one, so over-deletion is exact (Remark~\ref{rem:dred}). The cost was paid in identity --- provenance-distinct derivations denote distinct parts.
+
+\emph{CALM and coordination.} The dichotomy of Theorem~\ref{thm:dichotomy} is the deletion-side localization of the CALM boundary~\cite{Hellerstein10,AmelootNV13}; the 2P escape is the lattice-extension move that the relaxation literature~\cite{ZinnGL12,AmelootKNZ15} systematizes on the distribution side, here applied to the order on states. As in the companion paper, the boundary is claimed as CALM's; the identity-and-retention formulation is what the storage setting adds.
+
+\emph{CRDTs.} The 2P-set~\cite{Shapiro11} and Merkle-CRDTs~\cite{Sanjuan20} supply the state design; the contribution here is closure-theoretic: the \emph{derived} superstructure inherits monotonicity, confluence, and address stability (Theorems~\ref{thm:product}--\ref{thm:orderfree}), with the inheritance kernel-checked.
+
+\emph{Erasure and immutability.} The regulatory tension between content-addressed immutability and Art.~17 erasure~\cite{GDPR} is documented in~\cite{Finck19}; \S\ref{sec:erasure} gives it an exact form --- the retention model, the audit construction, and the entropy-bounded deniability of address-only tombstones~\cite{RogawayShrimpton04} --- and isolates the deduplication--deniability dilemma as the irreducible design choice.
+
+\section{Conclusion}\label{sec:conclusion}
+
+Growth and deletion are not symmetric in a content-addressed closure, and the asymmetry is now exact. Growth is free: monotone, coordination-free, address-stable, frontier-local. Deletion costs exactly one of three currencies --- retention (tombstones), coordination (epochs), or re-addability (2P permanence) --- and never costs survivor identity. The cone theorem makes the deleted region definitionally minimal; the anomaly theorem shows parsimonious views pay in the opposite direction (insertion on deletion, $58.1\%$ of the time on natural data); the dichotomy closes the door on rule-internal deletion. Open problems: identity-preserving restoration (re-add without epoch resets or re-keying); compaction of the grow-only remove set without losing order-freedom; and multi-tenant epochs, where different principals' erasure obligations cut the same store at different points --- a coordination structure the present theory treats as a single barrier.
+
+\paragraph{Artifacts.} Reference implementation, property suite, benchmarks, corpus scripts, and the extended Lean development accompany the companion repository; companion paper:~\cite{growth}.
+
+\begin{thebibliography}{19}\small
+
+\bibitem{AmelootKNZ15} T.~J. Ameloot, B.~Ketsman, F.~Neven, D.~Zinn.
+Weaker forms of monotonicity for declarative networking: a more fine-grained answer to the CALM-conjecture.
+\emph{ACM Trans.\ Database Syst.} 40(4):21:1--21:45, 2015.
+
+\bibitem{AmelootNV13} T.~J. Ameloot, F.~Neven, J.~Van den Bussche.
+Relational transducers for declarative networking.
+\emph{J.~ACM} 60(2):15:1--15:38, 2013.
+
+\bibitem{Finck19} M.~Finck.
+\emph{Blockchain and the General Data Protection Regulation: Can distributed ledgers be squared with European data protection law?}
+Study PE 634.445, European Parliamentary Research Service (STOA), July 2019.
+
+\bibitem{GDPR} European Parliament and Council.
+Regulation (EU) 2016/679 (General Data Protection Regulation), Article 17: Right to erasure.
+\emph{Official Journal of the European Union} L119, 2016.
+
+\bibitem{GuptaMS93} A.~Gupta, I.~S. Mumick, V.~S. Subrahmanian.
+Maintaining views incrementally.
+\emph{Proc.\ ACM SIGMOD}, 157--166, 1993.
+
+\bibitem{Hellerstein10} J.~M. Hellerstein.
+The declarative imperative: experiences and conjectures in distributed logic.
+\emph{SIGMOD Record} 39(1), 2010.
+
+\bibitem{HellersteinAlvaro20} J.~M. Hellerstein, P.~Alvaro.
+Keeping CALM: when distributed consistency is easy.
+\emph{Commun.\ ACM} 63(9), 2020.
+
+\bibitem{Merkle87} R.~C. Merkle.
+A digital signature based on a conventional encryption function.
+\emph{Proc.\ CRYPTO}, 1987.
+
+\bibitem{RogawayShrimpton04} P.~Rogaway, T.~Shrimpton.
+Cryptographic hash-function basics: definitions, implications, and separations for preimage resistance, second-preimage resistance, and collision resistance.
+\emph{Proc.\ FSE}, LNCS 3017, 371--388, 2004.
+
+\bibitem{Sanjuan20} H.~Sanju\'an, S.~P\"oyht\"ari, P.~Teixeira, Y.~Psaras.
+Merkle-CRDTs: Merkle-DAGs meet CRDTs.
+arXiv:2004.00107, 2020.
+
+\bibitem{Shapiro11} M.~Shapiro, N.~Pregui\c{c}a, C.~Baquero, M.~Zawirski.
+Conflict-free replicated data types.
+\emph{Proc.\ SSS}, 2011.
+
+\bibitem{growth} B.~Sour.
+Monotone growth of content-addressed rule closures.
+arXiv:XXXX.XXXXX, 2026. Under review.
+
+\bibitem{ZinnGL12} D.~Zinn, T.~J. Green, B.~Lud\"ascher.
+Win-move is coordination-free (sometimes).
+\emph{Proc.\ ICDT}, 2012.
+
+\end{thebibliography}
+
+\end{document}
