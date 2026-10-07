@@ -271,14 +271,42 @@ summary["checks"]["negative_control_max_only_is_nonmonotone"] = {"result": "PASS
 x1 = gc.atom("same-payload", "D1")
 x2 = gc.atom("same-payload", "D2")
 same_addr = x1["addr"] == x2["addr"]
+
+batch_conflict_rejected = False
+try:
+    gc.close_field([x1, x2])
+except ValueError:
+    batch_conflict_rejected = True
+
+base, _ = gc.close_field([x1])
+incremental_conflict_rejected = False
+try:
+    gc.close_incremental(base, [x2])
+except ValueError:
+    incremental_conflict_rejected = True
+
+# Exact duplicate ingestion remains idempotent.
+dup_parts, dup_gov = gc.close_field([x1, dict(x1)])
+single_parts, single_gov = gc.close_field([x1])
+duplicate_idempotent = norm(dup_parts, dup_gov) == norm(single_parts, single_gov)
+
+assert same_addr
+assert batch_conflict_rejected
+assert incremental_conflict_rejected
+assert duplicate_idempotent
+
+summary["checks"]["atom_identity_conflict_guard"] = {
+    "same_payload_cross_descriptor_same_address": same_addr,
+    "batch_conflict_rejected": batch_conflict_rejected,
+    "incremental_conflict_rejected": incremental_conflict_rejected,
+    "exact_duplicate_idempotent": duplicate_idempotent,
+    "result": "PASS",
+}
 summary["observations"]["same_payload_different_descriptor"] = {
     "same_address": same_addr,
     "D1_addr": x1["addr"],
     "D2_addr": x2["addr"],
-    "interpretation_required": (
-        "If descriptor is intended to participate in Atom identity, this is a collision-by-design; "
-        "if descriptor is intentionally non-identity metadata, it is expected."
-    ),
+    "status": "Guarded: conflicting records for one address are now rejected on the audit branch.",
 }
 
 outdir = os.environ.get("VERIFY_OUT", "verification-logs")
