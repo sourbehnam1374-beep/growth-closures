@@ -1,0 +1,93 @@
+name: AI verification audit
+
+on:
+  push:
+    branches:
+      - ai-verification-2026-10-07
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+
+      - name: Runtime fingerprint
+        run: |
+          set -euxo pipefail
+          mkdir -p verification-logs
+          git rev-parse HEAD | tee verification-logs/commit.txt
+          python3 --version | tee verification-logs/python-version.txt
+
+      - name: Reject proof placeholders
+        run: |
+          set -euxo pipefail
+          if grep -nE '(^|[^A-Za-z])(sorry|admit)([^A-Za-z]|$)|^[[:space:]]*axiom[[:space:]]' lean/GrowthClosure.lean | tee verification-logs/lean-placeholder-scan.txt | grep -q .; then
+            echo "Found proof placeholder or explicit axiom declaration."
+            exit 1
+          else
+            echo "No sorry/admit/explicit axiom declarations found." | tee verification-logs/lean-placeholder-scan.txt
+          fi
+
+      - name: Compile Python verifiers
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile             verifiers/growth_check.py             verifiers/test_growth_properties.py             verifiers/delete_growth.py             verifiers/test_anomaly_characterization.py             verifiers/verify_o1_necessity.py             verifiers/verify_unified.py             verifiers/ai_adversarial_verify.py
+
+      - name: Run repository verification stack
+        run: |
+          set -euxo pipefail
+          for f in             growth_check.py             test_growth_properties.py             delete_growth.py             test_anomaly_characterization.py             verify_o1_necessity.py             verify_unified.py
+          do
+            echo "===== $f =====" | tee "verification-logs/$f.log"
+            (cd verifiers && python3 "$f") 2>&1 | tee -a "verification-logs/$f.log"
+          done
+
+      - name: Run independent adversarial verifier
+        env:
+          VERIFY_OUT: verification-logs
+        run: |
+          set -euxo pipefail
+          (cd verifiers && VERIFY_OUT="../verification-logs" python3 ai_adversarial_verify.py) 2>&1 | tee verification-logs/ai_adversarial_verify.log
+
+      - name: Install Lean 4.30.0
+        run: |
+          set -euxo pipefail
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain leanprover/lean4:v4.30.0
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/lean" --version | tee verification-logs/lean-version.txt
+
+      - name: Kernel-check Lean development
+        run: |
+          set -euxo pipefail
+          "$HOME/.elan/bin/lean" lean/GrowthClosure.lean 2>&1 | tee verification-logs/lean-kernel-check.log
+
+      - name: Build audit summary
+        if: always()
+        run: |
+          {
+            echo "# AI Verification Audit"
+            echo
+            echo "Commit: $(git rev-parse HEAD)"
+            echo
+            echo "Logs are preserved in this artifact."
+            echo
+            echo "## Scope"
+            echo "- Repository Python verifier stack"
+            echo "- Independent exhaustive finite oracle checks"
+            echo "- Lean placeholder scan"
+            echo "- Lean 4.30.0 kernel compilation"
+          } > verification-logs/README.md
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-verification-evidence
+          path: verification-logs/
+          if-no-files-found: error
