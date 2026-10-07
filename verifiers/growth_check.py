@@ -122,8 +122,31 @@ def expand(parts, b, o, r):
     return merged, changed
 
 
+def _insert_by_address(parts, p, *, where):
+    """Insert a part without silently accepting two records for one address.
+
+    H4 treats addresses as injective on the committed preimage.  For atoms the
+    paper additionally requires the descriptor to be a payload field.  If a
+    caller violates that discipline (same payload/address, conflicting
+    descriptor metadata), silently keeping the last record makes the result
+    ingestion-order dependent.  Reject the conflict instead.
+    """
+    prev = parts.get(p["addr"])
+    if prev is not None:
+        if prev != p:
+            raise ValueError(
+                "content-address identity conflict at %s: address %s maps to "
+                "non-identical records" % (where, p["addr"])
+            )
+        return False
+    parts[p["addr"]] = dict(p)
+    return True
+
+
 def close_field(seed, b=2.0, o=2.0, r=0.0):
-    parts = {p["addr"]: dict(p) for p in seed}
+    parts = {}
+    for p in seed:
+        _insert_by_address(parts, p, where="seed")
     while True:
         parts, changed = expand(parts, b, o, r)
         if not changed:
@@ -138,8 +161,7 @@ def close_incremental(existing, delta_atoms, b=2.0, o=2.0, r=0.0):
     parts = {a: dict(p) for a, p in existing.items()}
     frontier = set()
     for a in delta_atoms:
-        if a["addr"] not in parts:
-            parts[a["addr"]] = dict(a)
+        if _insert_by_address(parts, a, where="incremental delta"):
             frontier.add(a["addr"])
     while frontier:
         nf = set()
