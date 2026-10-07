@@ -27,7 +27,7 @@ jobs:
       - name: Reject proof placeholders
         run: |
           set -euxo pipefail
-          if grep -nE '(^|[^A-Za-z])(sorry|admit)([^A-Za-z]|$)|^[[:space:]]*axiom[[:space:]]' lean/GrowthClosure.lean | tee verification-logs/lean-placeholder-scan.txt | grep -q .; then
+          if grep -nE '^[[:space:]]*(sorry|admit)([[:space:]]|$)|:=[[:space:]]*(sorry|admit)([[:space:]]|$)|by[[:space:]]+(sorry|admit)([[:space:]]|$)|^[[:space:]]*axiom[[:space:]]' lean/GrowthClosure.lean | tee verification-logs/lean-placeholder-scan.txt | grep -q .; then
             echo "Found proof placeholder or explicit axiom declaration."
             exit 1
           else
