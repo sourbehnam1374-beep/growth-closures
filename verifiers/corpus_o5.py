@@ -9,14 +9,12 @@ corpus_o5.py — O5: the price of deniability, measured.
     same-era dedup; cross-era freshness (XSTAB fails); re-add after
     removal at a fresh era (READD holds).
 """
-import re, math, urllib.request, collections
+import math, collections
 import growth_check as gc
+from corpus_fixture import load_corpus, extract_sentences
 
-URL = "https://www.gutenberg.org/files/2701/2701-0.txt"
-raw = urllib.request.urlopen(URL, timeout=60).read().decode("utf-8", "replace")
-s, e = raw.find("*** START"), raw.find("*** END")
-body = raw[raw.find("\n", s):e] if s != -1 and e != -1 else raw
-sentences = [t.strip() for t in re.split(r"[.!?]+", body) if len(t.strip()) >= 20]
+raw, manifest = load_corpus()
+sentences = extract_sentences(raw)
 
 N = len(sentences)
 counts = collections.Counter(sentences)
@@ -25,6 +23,8 @@ dup_mass = N - Udist                       # ingestions unified by dedup
 top_dups = [(c, p[:50]) for p, c in counts.most_common(5) if c > 1]
 
 print("== O5 measurement: Moby-Dick sentence corpus ==")
+print("snapshot                     : " + manifest["snapshot_id"])
+print("source SHA-256               : " + manifest["sha256"])
 print("ingestions (sentences)        : %d" % N)
 print("distinct payloads             : %d" % Udist)
 print("dedup mass (unified copies)   : %d  (%.2f%% of ingestions)"
@@ -59,3 +59,6 @@ print("cross-era same content is fresh (XSTAB fails):", "PASS" if cross_era_fres
 print("removed at era1, re-added era2 -> live (READD):", "PASS" if readd_live else "FAIL")
 print("-" * 70)
 print("O5 + kappa5 demo:", "ALL PASS" if (same_era_dedup and cross_era_fresh and readd_live) else "FAILURE")
+expected = manifest["expected"]
+counts_ok = (N, Udist, dup_mass) == (expected["sentences"], expected["distinct_payloads"], expected["duplicate_mass"])
+raise SystemExit(0 if counts_ok and same_era_dedup and cross_era_fresh and readd_live else 1)

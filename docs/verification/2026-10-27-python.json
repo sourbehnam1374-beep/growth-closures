@@ -1,0 +1,89 @@
+{
+  "scope": "python",
+  "git_head": "85f76771fa0bfb3d3492f9520da42c6d62403517",
+  "worktree_dirty": true,
+  "python": "3.12.14",
+  "dependencies": {
+    "hypothesis": "6.170.12",
+    "pytest": "9.1.1"
+  },
+  "source_sha256": {
+    "verifiers/ai_adversarial_verify.py": "23552e6d302d9b022a956634752762cad8ab18e308f99569d4b15a7612876c6e",
+    "verifiers/bench_growth.py": "39d97842ddec9792df19ed4218e311ba51d0451d8bcb07d4a5030d8e9be19364",
+    "verifiers/corpus_cohorts.py": "7f520731cc870dcdce646c0188ecf776098948f9c0fea230e4000c7dc0c91c03",
+    "verifiers/corpus_fixture.py": "e390b13cc0d2d522bffa08c11ecdd4c8c98f4e275dd3b34fb26eeebec32abacf",
+    "verifiers/corpus_o5.py": "eec5073347e9f806a5a693ba39ffe1100b14cfa85a79d11ccd303d6b3b040c62",
+    "verifiers/delete_growth.py": "9eaa4d6e5aad6f0b0b4a0e6207029cfd68d9f9027b909d136a4b2427aebb38f0",
+    "verifiers/growth_check.py": "663b5ffa1c504d6654c51eaf4c21025293f522612ae3418181141ee4cd8ba205",
+    "verifiers/run_verification.py": "c2ba8bc7b134dfb111988764d4984b1fd29bfeadf139ed3a3f7be3ccce339816",
+    "verifiers/test_anomaly_characterization.py": "4807e1392348f6669a08f7e06e84ad829f52ca162e836428edd1f2757efb58e5",
+    "verifiers/test_corpus_fixture.py": "2da4344d33a0155e2725158ffd031e963f9430e118b290120045ac34a3da0d02",
+    "verifiers/test_delete_properties.py": "25609661cf9060df98b493a4014a98b6bfc54826351a7439227b300fc8f1ed65",
+    "verifiers/test_growth_properties.py": "5d0f2fc8c7721fcb545044a21d207981e0fc9b9a3b51e0936c20506ca153d713",
+    "verifiers/test_identity_conflicts.py": "13c048978cde6f465cf3d85a0b20e6bb411984c8db89b73eabc412c3890b6c8b",
+    "verifiers/test_verifier_failures.py": "2bcf4cee7c940881565aab85a1402d779660d0b4b1dc134937f00715546c08a3",
+    "verifiers/verify_o1_necessity.py": "aafcbee465b675fc2e7342dc2e8fe20a74edc4929a5f03defd5e36b6cda09326",
+    "verifiers/verify_unified.py": "a762748259c89e713f367293421180fd1e4e4d329173c72b6014aac898aec01c",
+    "verifiers/data/moby_dick.json": "c48f442c6a5c381416f2ac918110a6f52cf4c6c1b6a34e604d61179030c8171a",
+    "verifiers/data/moby_dick_2701_2026-10-27.txt.gz": "992037a870a617403af61f8cd8a183f035e237f55693b470ff57e22d4ba21f0b",
+    "requirements-verification.txt": "afd37e2b50ec1419d29e65288dc83c18cbd3f5cbdc17daee102357e7d94e990b",
+    "lean/GrowthClosure.lean": "e784b20c26da2d368bf4fe9d5eaa26c6f1c1952fb29c22ef48bc6e304c7f58ba",
+    ".github/workflows/ai-verification.yml": "ee5fc25b153040f6f3c2cbb904ab985f25f3888f2c2da9611df66afa0833d548"
+  },
+  "checks": [
+    {
+      "name": "python_compile",
+      "returncode": 0
+    },
+    {
+      "name": "lean_source_placeholder_scan",
+      "returncode": 0
+    },
+    {
+      "name": "growth_check.py",
+      "returncode": 0,
+      "seconds": 0.053
+    },
+    {
+      "name": "test_growth_properties.py",
+      "returncode": 0,
+      "seconds": 1.806
+    },
+    {
+      "name": "delete_growth.py",
+      "returncode": 0,
+      "seconds": 0.736
+    },
+    {
+      "name": "test_anomaly_characterization.py",
+      "returncode": 0,
+      "seconds": 4.64
+    },
+    {
+      "name": "verify_o1_necessity.py",
+      "returncode": 0,
+      "seconds": 0.103
+    },
+    {
+      "name": "verify_unified.py",
+      "returncode": 0,
+      "seconds": 0.085
+    },
+    {
+      "name": "ai_adversarial_verify.py",
+      "returncode": 0,
+      "seconds": 0.383
+    },
+    {
+      "name": "corpus_o5.py",
+      "returncode": 0,
+      "seconds": 0.101
+    },
+    {
+      "name": "pytest",
+      "returncode": 0,
+      "seconds": 3.648
+    }
+  ],
+  "status": "PASS"
+}

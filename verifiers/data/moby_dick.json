@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "gutenberg-2701-2026-10-27",
+  "title": "Moby-Dick; or, The Whale",
+  "author": "Herman Melville",
+  "source_url": "https://www.gutenberg.org/files/2701/2701-0.txt",
+  "retrieved_on": "2026-10-27",
+  "http_last_modified": "Fri, 09 Oct 2026 14:50:39 GMT",
+  "bytes": 1234646,
+  "sha256": "f12eb530502755ef2b8f535e2ecef3e95802eab584e60ac7992ccf856256fdbe",
+  "gzip_sha256": "992037a870a617403af61f8cd8a183f035e237f55693b470ff57e22d4ba21f0b",
+  "transformation": "Lossless gzip only; decompressed source bytes are unmodified.",
+  "expected": {
+    "sentences": 8637,
+    "distinct_payloads": 8598,
+    "duplicate_mass": 39,
+    "atoms": 8632,
+    "descriptors": 3079,
+    "mass_ge_4": 5013,
+    "max_cohort": 268,
+    "bindable_cohorts": 638
+  },
+  "historical_paper_measurement": {
+    "sentences": 8636,
+    "distinct_payloads": 8597,
+    "duplicate_mass": 39,
+    "atoms": 8631,
+    "mass_ge_4": 5014,
+    "verification_run": "https://github.com/sourbehnam1374-beep/growth-closures/actions/runs/37555848606",
+    "verification_date": "2026-10-07",
+    "original_source_sha256": null,
+    "status": "Recorded historical result; original input bytes were not retained. The pinned snapshot is a separately identified corpus revision, not a byte reproduction of the paper input."
+  },
+  "rights": "Original 1851 work is public domain in the United States. Full Project Gutenberg source and license text retained in the snapshot."
+}

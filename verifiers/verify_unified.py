@@ -75,3 +75,4 @@ for k, v in ok.items():
     print("[%s] %s" % ("PASS" if v else "FAIL", k))
 print("-" * 70)
 print("DETERMINATION SCHEMAS:", "ALL PASS" if all(ok.values()) else "FAILURE")
+raise SystemExit(0 if all(ok.values()) else 1)

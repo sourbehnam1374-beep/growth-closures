@@ -32,15 +32,28 @@ Audited declarations include `conservativity`, `galois`, `descent`, `step_mono`,
 ## Executable verification
 
 ```bash
-python3 verifiers/growth_check.py
-python3 verifiers/test_growth_properties.py
-python3 verifiers/delete_growth.py
-python3 verifiers/test_anomaly_characterization.py
-python3 verifiers/verify_o1_necessity.py
-python3 verifiers/verify_unified.py
+python3 -m pip install -r requirements-verification.txt
+python3 verifiers/run_verification.py --out verification-logs
+# Include the pinned Lean kernel check when Lean 4.30.0 is installed:
+python3 verifiers/run_verification.py --lean lean --out verification-logs
 ```
 
-The repository includes deterministic ledgers, randomized property suites, exhaustive finite checks, and corpus-scale identity measurements.
+The runner covers the published ledgers, growth and anomaly properties,
+deletion properties, identity-conflict regressions, independent finite-oracle
+checks, corpus measurements, and negative controls for failed verifiers.
+It writes logs and a JSON receipt containing code/input hashes and runtime
+versions. GitHub Actions runs the full Python + Lean audit on pull requests
+to `main` and pushes to `main`.
+
+Verification reads a bundled, hash-checked corpus and needs no network after
+dependencies and Lean are installed. The pinned 27 October 2026 revision
+has 8,632 described sentences and 5,013 in cohorts of size at least four.
+The papers' earlier 8,631 / 5,014 result is preserved as historical evidence;
+its original input bytes were not retained. These are separately identified
+corpus revisions. No manuscript figures or paper counts are changed here.
+
+See [the input contract and repair receipt](docs/IDENTITY_AND_REPRODUCIBILITY.md)
+for the two-phase fix, regression evidence, and SHIVA adapter requirements.
 
 ## Repository layout
 

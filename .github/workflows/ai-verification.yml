@@ -1,0 +1,51 @@
+name: AI verification audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-verification.txt
+
+      - name: Install pinned verification dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-verification.txt
+
+      - name: Install Lean 4.30.0
+        run: |
+          set -euo pipefail
+          mkdir -p verification-logs
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o verification-logs/elan-init.sh
+          sh verification-logs/elan-init.sh -y --no-modify-path --default-toolchain leanprover/lean4:v4.30.0
+
+      - name: Run complete offline audit
+        run: |
+          set -euo pipefail
+          python verifiers/run_verification.py --lean "$HOME/.elan/bin/lean" --out verification-logs
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verification-logs/
+          if-no-files-found: error
