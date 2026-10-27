@@ -22,6 +22,7 @@ import sys
 from growth_check import (
     atom, composite, close_field, close_incremental, canonical,
     quotient_view, max_blocks, GRADE, TOP_ADDR, line,
+    _insert_by_address,
 )
 
 
@@ -81,11 +82,15 @@ def epoch(parts, del_addrs, b=2.0, o=2.0, r=0.0):
 # ----------------------------------------------------------------------
 def two_phase(ops, b=2.0, o=2.0, r=0.0):
     """ops: sequence of ('add', atom_dict) / ('remove', atom_addr).
-    Folds to (A, R) ignoring order, then closes the live seed."""
+    Folds to (A, R) ignoring order, then closes the live seed.
+
+    Every add is checked before tombstone filtering: a remove cannot hide
+    two incompatible records for one identity. Exact duplicates are no-ops.
+    """
     A, R = {}, set()
     for kind, x in ops:
         if kind == "add":
-            A[x["addr"]] = x
+            _insert_by_address(A, x, where="two-phase add")
         elif kind == "remove":
             R.add(x)
     live = [p for a, p in A.items() if a not in R]

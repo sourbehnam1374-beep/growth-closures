@@ -89,3 +89,4 @@ print("O1-d  blow-up conserved (records <-> parts):", "PASS" if cons_ok else "FA
 
 print("-" * 70)
 print("O1 VERIFICATION:", "ALL PASS" if (len(derivs) == 5 and all_break and ok and cons_ok) else "FAILURE")
+raise SystemExit(0 if len(derivs) == 5 and all_break and ok and cons_ok else 1)

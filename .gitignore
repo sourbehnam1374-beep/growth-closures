@@ -4,3 +4,5 @@
 *.synctex*
 __pycache__/
 .hypothesis/
+.pytest_cache/
+verification-logs/

@@ -19,6 +19,7 @@ import os
 from math import comb
 
 import growth_check as gc
+from delete_growth import two_phase
 
 US = b"\x1f"
 
@@ -295,11 +296,30 @@ assert batch_conflict_rejected
 assert incremental_conflict_rejected
 assert duplicate_idempotent
 
+# Check conflicts before two-phase deduplication or tombstone filtering.
+two_phase_conflicts = 0
+for order in itertools.permutations((x1, x2)):
+    try:
+        two_phase([("add", item) for item in order])
+    except ValueError:
+        two_phase_conflicts += 1
+assert two_phase_conflicts == 2
+for order in itertools.permutations((("add", x1), ("add", x2), ("remove", x1["addr"]))):
+    try:
+        two_phase(order)
+    except ValueError:
+        two_phase_conflicts += 1
+assert two_phase_conflicts == 8
+tp_parts, tp_gov, _, _ = two_phase([("add", x1), ("add", dict(x1))])
+assert (tp_parts, tp_gov) == (single_parts, single_gov)
+
 summary["checks"]["atom_identity_conflict_guard"] = {
     "same_payload_cross_descriptor_same_address": same_addr,
     "batch_conflict_rejected": batch_conflict_rejected,
     "incremental_conflict_rejected": incremental_conflict_rejected,
     "exact_duplicate_idempotent": duplicate_idempotent,
+    "two_phase_conflicting_orders_rejected": two_phase_conflicts,
+    "two_phase_exact_duplicate_idempotent": True,
     "result": "PASS",
 }
 summary["observations"]["same_payload_different_descriptor"] = {

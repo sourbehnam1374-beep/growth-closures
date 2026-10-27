@@ -681,6 +681,8 @@ def self_check():
     P(line("="))
     P("ALL CHECKS PASS : %s" % allok)
     P(line("="))
+    if not allok:
+        raise AssertionError("Growth ledger failed")
     return "\n".join(out)
 
 

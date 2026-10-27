@@ -7,32 +7,17 @@ frequent non-stopword token of length >= 3 (ties broken alphabetically).
 Measures the cohort-size distribution and the implied storage cost of the
 complete bind semantics vs the quotient-view / cohort-object alternatives.
 """
-import re, math, json, urllib.request, collections
+import math, json
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-URL = "https://www.gutenberg.org/files/2701/2701-0.txt"
-STOP = set("""the a an and or but of to in on at by for with from as is are was were be been
-being it its this that these those he she they we you i his her their our your my me him them
-us not no nor so if then than there here when where which who whom what all any some such own
-same very can will just do does did done have has had may might must shall should would could
-about into over under again further once more most other only out up down off above below""".split())
+from corpus_fixture import load_corpus, extract_sentences, descriptor_cohorts
 
 def main():
-    raw = urllib.request.urlopen(URL, timeout=60).read().decode("utf-8", "replace")
-    # strip Gutenberg header/footer
-    s = raw.find("*** START"); e = raw.find("*** END")
-    body = raw[raw.find("\n", s):e] if s != -1 and e != -1 else raw
-    sentences = [t.strip() for t in re.split(r"[.!?]+", body) if len(t.strip()) >= 20]
-    coh = collections.Counter()
-    for sent in sentences:
-        words = [w for w in re.findall(r"[a-z]+", sent.lower()) if len(w) >= 3 and w not in STOP]
-        if not words:
-            continue
-        freq = collections.Counter(words)
-        top = sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
-        coh[top] += 1
+    raw, manifest = load_corpus()
+    coh = descriptor_cohorts(extract_sentences(raw))
+    print("corpus snapshot        : " + manifest["snapshot_id"])
+    print("source SHA-256         : " + manifest["sha256"])
     sizes = sorted(coh.values(), reverse=True)
     n_atoms, n_desc = sum(sizes), len(sizes)
     bindable = [n for n in sizes if n >= 3]
@@ -66,7 +51,8 @@ def main():
     fig.tight_layout(); fig.savefig("fig_cohorts.pdf"); fig.savefig("fig_cohorts.png", dpi=160)
     json.dump({"atoms": n_atoms, "desc": n_desc, "bindable": len(bindable),
                "covered": sum(bindable), "nmax": nmax, "log10_total": log10_total,
-               "top10": top10}, open("corpus_stats.json", "w"))
+               "top10": top10, "snapshot_id": manifest["snapshot_id"],
+               "source_sha256": manifest["sha256"]}, open("corpus_stats.json", "w"))
     print("saved fig_cohorts.{pdf,png}")
 
 if __name__ == "__main__":
